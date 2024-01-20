@@ -61,6 +61,7 @@ common_deps = [
         libcurl,
         libxz,
         libz,
+        libzstd,
 ]
 
 executables += [
