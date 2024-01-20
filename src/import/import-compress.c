@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "import-compress.h"
+#include "cpu-set-util.h"
 #include "log.h"
 #include "string-table.h"
 
@@ -26,13 +27,10 @@ void import_compress_free(ImportCompress *c) {
 #endif
 #if HAVE_ZSTD
         } else if (c->type == IMPORT_COMPRESS_ZSTD) {
-                if (c->encoding) {
-                        ZSTD_freeCCtx(c->c_zstd);
-                        c->c_zstd = NULL;
-                } else {
-                        ZSTD_freeDCtx(c->d_zstd);
-                        c->d_zstd = NULL;
-                }
+                if (c->encoding)
+                        ZSTD_freeCCtx(TAKE_PTR(c->c_zstd));
+                else
+                        ZSTD_freeDCtx(TAKE_PTR(c->d_zstd));
 #endif
         }
 
@@ -92,10 +90,20 @@ int import_uncompress_detect(ImportCompress *c, const void *data, size_t size) {
 
                 c->type = IMPORT_COMPRESS_BZIP2;
 #endif
+
 #if HAVE_ZSTD
         } else if (memcmp(data, zstd_signature, sizeof(zstd_signature)) == 0) {
+                unsigned long long r2 = ZSTD_getFrameContentSize(data, size);
+                if (r2 == ZSTD_CONTENTSIZE_ERROR)
+                        return -EIO;
+
                 c->d_zstd = ZSTD_createDCtx();
                 if (!c->d_zstd)
+                        return -ENOMEM;
+
+                assert(c->zstd_d == NULL);
+                c->zstd_d = ZSTD_createDStream();
+                if (c->zstd_d == NULL)
                         return -ENOMEM;
 
                 c->type = IMPORT_COMPRESS_ZSTD;
@@ -222,7 +230,7 @@ int import_uncompress(ImportCompress *c, const void *data, size_t size, ImportCo
                 };
 
                 while (input.pos < input.size) {
-                        uint8_t buffer[16 * 1024];
+                        uint8_t buffer[ZSTD_DStreamOutSize()];
                         ZSTD_outBuffer output = {
                                 .dst = buffer,
                                 .size = sizeof(buffer),
@@ -231,12 +239,16 @@ int import_uncompress(ImportCompress *c, const void *data, size_t size, ImportCo
 
                         res = ZSTD_decompressStream(c->d_zstd, &output, &input);
                         if (ZSTD_isError(res))
-                                return -EIO;
+                                return log_error_errno(
+                                                SYNTHETIC_ERRNO(EIO),
+                                                "Failed to decompress zstd stream: %s",
+                                                ZSTD_getErrorName(res));
 
                         if (output.pos > 0) {
                                 r = callback(output.dst, output.pos, userdata);
                                 if (r < 0)
                                         return r;
+                                output.pos = 0;
                         }
                 }
 
@@ -288,7 +300,7 @@ int import_compress_init(ImportCompress *c, ImportCompressType t) {
 #endif
 
 #if HAVE_ZSTD
-        case IMPORT_COMPRESS_ZSTD:
+        case IMPORT_COMPRESS_ZSTD: {
                 c->c_zstd = ZSTD_createCCtx();
                 if (!c->c_zstd)
                         return -ENOMEM;
@@ -297,8 +309,46 @@ int import_compress_init(ImportCompress *c, ImportCompressType t) {
                 if (ZSTD_isError(r))
                         return -EIO;
 
+                size_t r2;
+                int ncpus;
+
+                assert(c->zstd_c == NULL);
+                c->zstd_c = ZSTD_createCStream();
+                if (c->zstd_c == NULL)
+                        return -ENOMEM;
+
+                /* TODO: better default? zstd -3 is really weak */
+                r2 = ZSTD_CCtx_setParameter(c->zstd_c, ZSTD_c_compressionLevel, ZSTD_CLEVEL_DEFAULT);
+                if (ZSTD_isError(r2))
+                        return log_error_errno(
+                                        SYNTHETIC_ERRNO(EIO),
+                                        "Failed to set zstd compression level: %s",
+                                        ZSTD_getErrorName(r2));
+
+                r2 = ZSTD_CCtx_setParameter(c->zstd_c, ZSTD_c_checksumFlag, 1);
+                if (ZSTD_isError(r2))
+                        return log_error_errno(
+                                        SYNTHETIC_ERRNO(EIO),
+                                        "Failed to enable zstd output checksumming: %s",
+                                        ZSTD_getErrorName(r2));
+
+                ncpus = cpus_in_affinity_mask();
+                if (ncpus > 0) {
+                        r2 = ZSTD_CCtx_setParameter(c->zstd_c, ZSTD_c_nbWorkers, ncpus);
+                        if (!ZSTD_isError(r2))
+                                log_debug("Enabled zstd multithreaded compression with %d threads", ncpus);
+                        else
+                                log_warning("Failed to enable zstd multithreaded compression with %d threads, ignoring: %s",
+                                            ncpus,
+                                            ZSTD_getErrorName(r2));
+                } else
+                        log_warning_errno(
+                                        ncpus,
+                                        "Failed to determine available CPUs, not enabling zstd multithreaded compression: %m");
+
                 c->type = IMPORT_COMPRESS_ZSTD;
                 break;
+        }
 #endif
 
         case IMPORT_COMPRESS_UNCOMPRESSED:
@@ -428,6 +478,12 @@ int import_compress(ImportCompress *c, const void *data, size_t size, void **buf
                         .size = size,
                 };
 
+                /* Make sure that we start with at least ZSTD_CStreamOutSize()-sized buffer */
+                const size_t initial = ZSTD_CStreamOutSize();
+                r = enlarge_buffer(buffer, &initial, buffer_allocated);
+                if (r < 0)
+                        return r;
+
                 while (input.pos < input.size) {
                         r = enlarge_buffer(buffer, buffer_size, buffer_allocated);
                         if (r < 0)
@@ -439,9 +495,12 @@ int import_compress(ImportCompress *c, const void *data, size_t size, void **buf
                         };
                         size_t res;
 
-                        res = ZSTD_compressStream2(c->c_zstd, &output, &input, ZSTD_e_continue);
+                        res = ZSTD_compressStream2(c->c_zstd /*c->zstd_c*/, &output, &input, ZSTD_e_continue);
                         if (ZSTD_isError(res))
-                                return -EIO;
+                                return log_error_errno(
+                                                SYNTHETIC_ERRNO(EIO),
+                                                "Failed to compress into zstd stream: %s",
+                                                ZSTD_getErrorName(res));
 
                         *buffer_size += output.pos;
                 }
@@ -571,7 +630,10 @@ int import_compress_finish(ImportCompress *c, void **buffer, size_t *buffer_size
 
                         res = ZSTD_compressStream2(c->c_zstd, &output, &input, ZSTD_e_end);
                         if (ZSTD_isError(res))
-                                return -EIO;
+                                return log_error_errno(
+                                                SYNTHETIC_ERRNO(EIO),
+                                                "Failed to finalize zstd stream: %s",
+                                                ZSTD_getErrorName(res));
 
                         *buffer_size += output.pos;
                 } while (res != 0);

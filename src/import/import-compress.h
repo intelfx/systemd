@@ -25,6 +25,8 @@ typedef struct ImportCompress {
 #if HAVE_ZSTD
                 ZSTD_CCtx *c_zstd;
                 ZSTD_DCtx *d_zstd;
+                ZSTD_DStream *zstd_d;
+                ZSTD_CStream *zstd_c;
 #endif
         };
 } ImportCompress;
