@@ -26,28 +26,6 @@ static ImportCompressType arg_compress = IMPORT_COMPRESS_UNKNOWN;
 static ImageClass arg_class = IMAGE_MACHINE;
 static RuntimeScope arg_runtime_scope = _RUNTIME_SCOPE_INVALID;
 
-static void determine_compression_from_filename(const char *p) {
-
-        if (arg_compress != IMPORT_COMPRESS_UNKNOWN)
-                return;
-
-        if (!p) {
-                arg_compress = IMPORT_COMPRESS_UNCOMPRESSED;
-                return;
-        }
-
-        if (endswith(p, ".xz"))
-                arg_compress = IMPORT_COMPRESS_XZ;
-        else if (endswith(p, ".gz"))
-                arg_compress = IMPORT_COMPRESS_GZIP;
-        else if (endswith(p, ".bz2"))
-                arg_compress = IMPORT_COMPRESS_BZIP2;
-        else if (endswith(p, ".zst"))
-                arg_compress = IMPORT_COMPRESS_ZSTD;
-        else
-                arg_compress = IMPORT_COMPRESS_UNCOMPRESSED;
-}
-
 static void on_tar_finished(TarExport *export, int error, void *userdata) {
         sd_event *event = userdata;
         assert(export);
@@ -82,7 +60,8 @@ static int export_tar(int argc, char *argv[], void *userdata) {
                 path = argv[2];
         path = empty_or_dash_to_null(path);
 
-        determine_compression_from_filename(path);
+        if (arg_compress == IMPORT_COMPRESS_UNKNOWN)
+                arg_compress = filename_to_compression(path);
 
         if (path) {
                 open_fd = open(path, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC|O_NOCTTY, 0666);
@@ -163,7 +142,8 @@ static int export_raw(int argc, char *argv[], void *userdata) {
                 path = argv[2];
         path = empty_or_dash_to_null(path);
 
-        determine_compression_from_filename(path);
+        if (arg_compress == IMPORT_COMPRESS_UNKNOWN)
+                arg_compress = filename_to_compression(path);
 
         if (path) {
                 open_fd = open(path, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC|O_NOCTTY, 0666);

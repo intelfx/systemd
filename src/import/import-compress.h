@@ -10,18 +10,8 @@
 #include <zstd.h>
 #endif
 
-#include "shared-forward.h"
-
-typedef enum ImportCompressType {
-        IMPORT_COMPRESS_UNKNOWN,
-        IMPORT_COMPRESS_UNCOMPRESSED,
-        IMPORT_COMPRESS_XZ,
-        IMPORT_COMPRESS_GZIP,
-        IMPORT_COMPRESS_BZIP2,
-        IMPORT_COMPRESS_ZSTD,
-        _IMPORT_COMPRESS_TYPE_MAX,
-        _IMPORT_COMPRESS_TYPE_INVALID = -EINVAL,
-} ImportCompressType;
+#include "macro.h"
+#include "import-util.h"
 
 typedef struct ImportCompress {
         ImportCompressType type;
@@ -50,5 +40,3 @@ int import_uncompress(ImportCompress *c, const void *data, size_t size, ImportCo
 int import_compress_init(ImportCompress *c, ImportCompressType t);
 int import_compress(ImportCompress *c, const void *data, size_t size, void **buffer, size_t *buffer_size, size_t *buffer_allocated);
 int import_compress_finish(ImportCompress *c, void **buffer, size_t *buffer_size, size_t *buffer_allocated);
-
-DECLARE_STRING_TABLE_LOOKUP(import_compress_type, ImportCompressType);

@@ -19,6 +19,17 @@ typedef enum ImportVerify {
         _IMPORT_VERIFY_INVALID = -EINVAL,
 } ImportVerify;
 
+typedef enum ImportCompressType {
+        IMPORT_COMPRESS_UNKNOWN,
+        IMPORT_COMPRESS_UNCOMPRESSED,
+        IMPORT_COMPRESS_XZ,
+        IMPORT_COMPRESS_GZIP,
+        IMPORT_COMPRESS_BZIP2,
+        IMPORT_COMPRESS_ZSTD,
+        _IMPORT_COMPRESS_TYPE_MAX,
+        _IMPORT_COMPRESS_TYPE_INVALID = -EINVAL,
+} ImportCompressType;
+
 int import_url_last_component(const char *url, char **ret);
 
 int import_url_change_suffix(const char *url, size_t n_drop_components, const char *suffix, char **ret);
@@ -35,6 +46,9 @@ DECLARE_STRING_TABLE_LOOKUP(import_type, ImportType);
 
 DECLARE_STRING_TABLE_LOOKUP(import_verify, ImportVerify);
 
+DECLARE_STRING_TABLE_LOOKUP(import_compress_type, ImportCompressType);
+
+ImportCompressType filename_to_compression(const char *name);
 int tar_strip_suffixes(const char *name, char **ret);
 int raw_strip_suffixes(const char *name, char **ret);
 
