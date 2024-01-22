@@ -102,7 +102,7 @@ static bool arg_now = false;
 static bool arg_force = false;
 static ImportVerify arg_verify = IMPORT_VERIFY_SIGNATURE;
 static MachineRunner arg_runner = RUNNER_NSPAWN;
-static const char* arg_format = NULL;
+static ImportCompressType arg_format = IMPORT_COMPRESS_UNKNOWN;
 static const char *arg_uid = NULL;
 static char **arg_setenv = NULL;
 static unsigned arg_max_addresses = 1;
@@ -2333,11 +2333,19 @@ static int parse_argv(int argc, char *argv[]) {
                         break;
 
                 case ARG_FORMAT:
-                        if (!STR_IN_SET(optarg, "uncompressed", "xz", "gzip", "bzip2"))
-                                return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
-                                                       "Unknown format: %s", optarg);
+                        if (streq(optarg, "help")) {
+                                DUMP_STRING_TABLE_FROM(
+                                                import_compress_type,
+                                                ImportCompressType,
+                                                IMPORT_COMPRESS_UNCOMPRESSED,
+                                                _IMPORT_COMPRESS_TYPE_MAX);
+                                return 0;
+                        }
 
-                        arg_format = optarg;
+                        r = import_compress_type_from_string(optarg);
+                        if (r < 0)
+                                return log_error_errno(r, "Failed to parse --format= setting: %s", optarg);
+                        arg_format = r;
                         break;
 
                 case ARG_UID:
