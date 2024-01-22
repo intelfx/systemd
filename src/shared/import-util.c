@@ -9,6 +9,7 @@
 #include "nulstr-util.h"
 #include "string-table.h"
 #include "string-util.h"
+#include "strv.h"
 
 static const char *skip_protocol_and_hostname(const char *url) {
         const char *d;
@@ -137,21 +138,65 @@ static const char* const import_verify_table[_IMPORT_VERIFY_MAX] = {
 
 DEFINE_STRING_TABLE_LOOKUP(import_verify, ImportVerify);
 
+static const char* const import_compress_type_table[_IMPORT_COMPRESS_TYPE_MAX] = {
+        [IMPORT_COMPRESS_UNKNOWN]      = "unknown",
+        [IMPORT_COMPRESS_UNCOMPRESSED] = "uncompressed",
+        [IMPORT_COMPRESS_XZ]           = "xz",
+        [IMPORT_COMPRESS_GZIP]         = "gzip",
+#ifdef HAVE_BZIP2
+        [IMPORT_COMPRESS_BZIP2]        = "bzip2",
+#endif
+#ifdef HAVE_ZSTD
+        [IMPORT_COMPRESS_ZSTD]         = "zstd",
+#endif
+};
+
+DEFINE_STRING_TABLE_LOOKUP(import_compress_type, ImportCompressType);
+
+ImportCompressType filename_to_compression(const char *name) {
+
+        if (!name)
+                return IMPORT_COMPRESS_UNCOMPRESSED;
+
+        if (ENDSWITH_SET(name, ".xz", ".txz"))
+                return IMPORT_COMPRESS_XZ;
+        else if (ENDSWITH_SET(name, ".gz", ".tgz"))
+                return IMPORT_COMPRESS_GZIP;
+        else if (ENDSWITH_SET(name, ".bz2", ".tbz2"))
+                return IMPORT_COMPRESS_BZIP2;
+#ifdef HAVE_ZSTD
+        else if (ENDSWITH_SET(name, ".zst", ".tzst"))
+                return IMPORT_COMPRESS_ZSTD;
+#endif
+
+        return IMPORT_COMPRESS_UNCOMPRESSED;
+}
+
 int tar_strip_suffixes(const char *name, char **ret) {
+
+        static const char suffixes[] =
+                ".tar\0"
+                ".tar.gz\0"
+                ".tar.bz2\0"
+                ".tar.xz\0"
+                ".tar.zst\0"
+                ".tgz\0"
+                ".tbz2\0"
+                ".txz\0"
+                ".tzst\0"
+        ;
+
         const char *e;
         char *s;
 
-        e = endswith(name, ".tar");
-        if (!e)
-                e = endswith(name, ".tar.xz");
-        if (!e)
-                e = endswith(name, ".tar.gz");
-        if (!e)
-                e = endswith(name, ".tar.bz2");
-        if (!e)
-                e = endswith(name, ".tar.zst");
-        if (!e)
-                e = endswith(name, ".tgz");
+        assert(name);
+        assert(ret);
+
+        NULSTR_FOREACH(sfx, suffixes) {
+                e = endswith(name, sfx);
+                if (e)
+                        break;
+        }
         if (!e)
                 e = strchr(name, 0);
 
