@@ -24,28 +24,6 @@ static ImportCompressType arg_compress = IMPORT_COMPRESS_UNKNOWN;
 static ImageClass arg_class = IMAGE_MACHINE;
 static RuntimeScope arg_runtime_scope = _RUNTIME_SCOPE_INVALID;
 
-static void determine_compression_from_filename(const char *p) {
-
-        if (arg_compress != IMPORT_COMPRESS_UNKNOWN)
-                return;
-
-        if (!p) {
-                arg_compress = IMPORT_COMPRESS_UNCOMPRESSED;
-                return;
-        }
-
-        if (endswith(p, ".xz"))
-                arg_compress = IMPORT_COMPRESS_XZ;
-        else if (endswith(p, ".gz"))
-                arg_compress = IMPORT_COMPRESS_GZIP;
-        else if (endswith(p, ".bz2"))
-                arg_compress = IMPORT_COMPRESS_BZIP2;
-        else if (endswith(p, ".zst"))
-                arg_compress = IMPORT_COMPRESS_ZSTD;
-        else
-                arg_compress = IMPORT_COMPRESS_UNCOMPRESSED;
-}
-
 static void on_tar_finished(TarExport *export, int error, void *userdata) {
         sd_event *event = userdata;
         assert(export);
@@ -80,7 +58,8 @@ static int export_tar(int argc, char *argv[], void *userdata) {
                 path = argv[2];
         path = empty_or_dash_to_null(path);
 
-        determine_compression_from_filename(path);
+        if (arg_compress == IMPORT_COMPRESS_UNKNOWN)
+                arg_compress = filename_to_compression(path);
 
         if (path) {
                 open_fd = open(path, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC|O_NOCTTY, 0666);
@@ -153,7 +132,8 @@ static int export_raw(int argc, char *argv[], void *userdata) {
                 path = argv[2];
         path = empty_or_dash_to_null(path);
 
-        determine_compression_from_filename(path);
+        if (arg_compress == IMPORT_COMPRESS_UNKNOWN)
+                arg_compress = filename_to_compression(path);
 
         if (path) {
                 open_fd = open(path, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC|O_NOCTTY, 0666);
@@ -230,6 +210,7 @@ static int parse_argv(int argc, char *argv[]) {
         };
 
         int c;
+        int r;
 
         assert(argc >= 0);
         assert(argv);
@@ -245,19 +226,10 @@ static int parse_argv(int argc, char *argv[]) {
                         return version();
 
                 case ARG_FORMAT:
-                        if (streq(optarg, "uncompressed"))
-                                arg_compress = IMPORT_COMPRESS_UNCOMPRESSED;
-                        else if (streq(optarg, "xz"))
-                                arg_compress = IMPORT_COMPRESS_XZ;
-                        else if (streq(optarg, "gzip"))
-                                arg_compress = IMPORT_COMPRESS_GZIP;
-                        else if (streq(optarg, "bzip2"))
-                                arg_compress = IMPORT_COMPRESS_BZIP2;
-                        else if (streq(optarg, "zstd"))
-                                arg_compress = IMPORT_COMPRESS_ZSTD;
-                        else
-                                return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
-                                                       "Unknown format: %s", optarg);
+                        r = import_compress_type_from_string(optarg);
+                        if (r < 0)
+                                return log_error_errno(r, "Unknown format: %s", optarg);
+                        arg_compress = r;
                         break;
 
                 case ARG_CLASS:
