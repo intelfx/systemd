@@ -973,6 +973,16 @@ int secure_getenv_bool(const char *p) {
         return parse_boolean(e);
 }
 
+int getenv_int64(const char *p, int64_t *ret) {
+        const char *e;
+
+        e = getenv(p);
+        if (!e)
+                return -ENXIO;
+
+        return safe_atoi64(e, ret);
+}
+
 int secure_getenv_uint64(const char *p, uint64_t *ret) {
         const char *e;
 
