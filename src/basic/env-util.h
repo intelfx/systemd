@@ -65,6 +65,8 @@ int strv_env_get_merged(char **l, char ***ret);
 int getenv_bool(const char *p);
 int secure_getenv_bool(const char *p);
 
+int getenv_int64(const char *p, int64_t *ret);
+
 int secure_getenv_uint64(const char *p, uint64_t *ret);
 
 /* Like setenv, but calls unsetenv if value == NULL. */
