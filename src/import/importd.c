@@ -79,6 +79,7 @@ typedef struct Transfer {
         ImageClass class;
         ImportFlags flags;
         char *format;
+        ImportCompressLevel level;
 
         PidRef pidref;
 
@@ -460,11 +461,14 @@ static int transfer_start(Transfer *t) {
                         NULL, /* if so: the actual format */
                         NULL, /* maybe --image-root= */
                         NULL, /* if so: the image root path */
+                        NULL, /* maybe --level= */
+                        NULL, /* if so: the level */
                         NULL, /* remote */
                         NULL, /* local */
                         NULL
                 };
                 size_t k = 0;
+                _cleanup_free_ char *tmp_level = NULL;
 
                 /* Child */
 
@@ -563,6 +567,13 @@ static int transfer_start(Transfer *t) {
                 if (t->image_root) {
                         cmd[k++] = "--image-root";
                         cmd[k++] = t->image_root;
+                }
+
+                if (t->level != IMPORT_COMPRESS_LEVEL_UNKNOWN) {
+                        cmd[k++] = "--level";
+                        if (asprintf(&tmp_level, "%d", t->level) < 0)
+                                return log_oom();
+                        cmd[k++] = tmp_level;
                 }
 
                 if (!IN_SET(t->type, TRANSFER_EXPORT_TAR, TRANSFER_EXPORT_RAW)) {
@@ -966,6 +977,7 @@ static int method_export_tar_or_raw(sd_bus_message *msg, void *userdata, sd_bus_
         ImageClass class = _IMAGE_CLASS_INVALID;
         Manager *m = ASSERT_PTR(userdata);
         const char *local, *format;
+        int32_t level;
         TransferType type;
         uint64_t flags;
         struct stat st;
@@ -989,7 +1001,7 @@ static int method_export_tar_or_raw(sd_bus_message *msg, void *userdata, sd_bus_
         if (endswith(sd_bus_message_get_member(msg), "Ex")) {
                 const char *sclass;
 
-                r = sd_bus_message_read(msg, "sshst", &local, &sclass, &fd, &format, &flags);
+                r = sd_bus_message_read(msg, "sshsit", &local, &sclass, &fd, &format, &level, &flags);
                 if (r < 0)
                         return r;
 
@@ -1002,7 +1014,7 @@ static int method_export_tar_or_raw(sd_bus_message *msg, void *userdata, sd_bus_
                         return sd_bus_error_setf(error, SD_BUS_ERROR_INVALID_ARGS,
                                                  "Flags 0x%" PRIx64 " invalid", flags);
         } else {
-                r = sd_bus_message_read(msg, "shs", &local, &fd, &format);
+                r = sd_bus_message_read(msg, "shsi", &local, &fd, &format, &level);
                 if (r < 0)
                         return r;
 
@@ -1040,6 +1052,7 @@ static int method_export_tar_or_raw(sd_bus_message *msg, void *userdata, sd_bus_
                 if (!t->format)
                         return -ENOMEM;
         }
+        t->level = level;
 
         t->local = strdup(local);
         if (!t->local)
@@ -1607,21 +1620,23 @@ static const sd_bus_vtable manager_vtable[] = {
                                  method_import_fs,
                                  SD_BUS_VTABLE_UNPRIVILEGED),
         SD_BUS_METHOD_WITH_NAMES("ExportTar",
-                                 "shs",
+                                 "shsi",
                                  SD_BUS_PARAM(local_name)
                                  SD_BUS_PARAM(fd)
-                                 SD_BUS_PARAM(format),
+                                 SD_BUS_PARAM(format)
+                                 SD_BUS_PARAM(level),
                                  "uo",
                                  SD_BUS_PARAM(transfer_id)
                                  SD_BUS_PARAM(transfer_path),
                                  method_export_tar_or_raw,
                                  SD_BUS_VTABLE_UNPRIVILEGED),
         SD_BUS_METHOD_WITH_NAMES("ExportTarEx",
-                                 "sshst",
+                                 "sshsit",
                                  SD_BUS_PARAM(local_name)
                                  SD_BUS_PARAM(class)
                                  SD_BUS_PARAM(fd)
                                  SD_BUS_PARAM(format)
+                                 SD_BUS_PARAM(level)
                                  SD_BUS_PARAM(flags),
                                  "uo",
                                  SD_BUS_PARAM(transfer_id)
@@ -1629,21 +1644,23 @@ static const sd_bus_vtable manager_vtable[] = {
                                  method_export_tar_or_raw,
                                  SD_BUS_VTABLE_UNPRIVILEGED),
         SD_BUS_METHOD_WITH_NAMES("ExportRaw",
-                                 "shs",
+                                 "shsi",
                                  SD_BUS_PARAM(local_name)
                                  SD_BUS_PARAM(fd)
-                                 SD_BUS_PARAM(format),
+                                 SD_BUS_PARAM(format)
+                                 SD_BUS_PARAM(level),
                                  "uo",
                                  SD_BUS_PARAM(transfer_id)
                                  SD_BUS_PARAM(transfer_path),
                                  method_export_tar_or_raw,
                                  SD_BUS_VTABLE_UNPRIVILEGED),
         SD_BUS_METHOD_WITH_NAMES("ExportRawEx",
-                                 "sshst",
+                                 "sshsit",
                                  SD_BUS_PARAM(local_name)
                                  SD_BUS_PARAM(class)
                                  SD_BUS_PARAM(fd)
                                  SD_BUS_PARAM(format)
+                                 SD_BUS_PARAM(level)
                                  SD_BUS_PARAM(flags),
                                  "uo",
                                  SD_BUS_PARAM(transfer_id)
