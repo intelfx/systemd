@@ -89,24 +89,28 @@ node /org/freedesktop/import1 {
       ExportTar(in  s local_name,
                 in  h fd,
                 in  s format,
+                in  i level,
                 out u transfer_id,
                 out o transfer_path);
       ExportTarEx(in  s local_name,
                   in  s class,
                   in  h fd,
                   in  s format,
+                  in  i level,
                   in  t flags,
                   out u transfer_id,
                   out o transfer_path);
       ExportRaw(in  s local_name,
                 in  h fd,
                 in  s format,
+                in  i level,
                 out u transfer_id,
                 out o transfer_path);
       ExportRawEx(in  s local_name,
                   in  s class,
                   in  h fd,
                   in  s format,
+                  in  i level,
                   in  t flags,
                   out u transfer_id,
                   out o transfer_path);

@@ -42,6 +42,7 @@ static bool arg_quiet = false;
 static bool arg_ask_password = true;
 static ImportVerify arg_verify = IMPORT_VERIFY_SIGNATURE;
 static char *arg_format = NULL;
+static ImportCompressLevel arg_compress_level = IMPORT_COMPRESS_LEVEL_UNKNOWN;
 static JsonFormatFlags arg_json_format_flags = JSON_FORMAT_OFF;
 static ImageClass arg_image_class = _IMAGE_CLASS_INVALID;
 
@@ -519,10 +520,11 @@ static int export_tar(int argc, char *argv[], void *userdata) {
 
                 r = sd_bus_message_append(
                                 m,
-                                "shs",
+                                "shsi",
                                 local,
                                 fd >= 0 ? fd : STDOUT_FILENO,
-                                arg_format);
+                                arg_format,
+                                (int32_t)arg_compress_level);
         } else {
                 r = bus_message_new_method_call(bus, &m, bus_import_mgr, "ExportTarEx");
                 if (r < 0)
@@ -530,11 +532,12 @@ static int export_tar(int argc, char *argv[], void *userdata) {
 
                 r = sd_bus_message_append(
                                 m,
-                                "sshst",
+                                "sshsit",
                                 local,
                                 image_class_to_string(arg_image_class),
                                 fd >= 0 ? fd : STDOUT_FILENO,
                                 arg_format,
+                                (int32_t)arg_compress_level,
                                 /* flags= */ UINT64_C(0));
         }
         if (r < 0)
@@ -581,10 +584,11 @@ static int export_raw(int argc, char *argv[], void *userdata) {
 
                 r = sd_bus_message_append(
                                 m,
-                                "shs",
+                                "shsi",
                                 local,
                                 fd >= 0 ? fd : STDOUT_FILENO,
-                                arg_format);
+                                arg_format,
+                                (int32_t)arg_compress_level);
         } else {
                 r = bus_message_new_method_call(bus, &m, bus_import_mgr, "ExportRawEx");
                 if (r < 0)
@@ -592,11 +596,12 @@ static int export_raw(int argc, char *argv[], void *userdata) {
 
                 r = sd_bus_message_append(
                                 m,
-                                "sshst",
+                                "sshsit",
                                 local,
                                 image_class_to_string(arg_image_class),
                                 fd >= 0 ? fd : STDOUT_FILENO,
                                 arg_format,
+                                (int32_t)arg_compress_level,
                                 /* flags= */ UINT64_C(0));
         }
         if (r < 0)
@@ -1127,7 +1132,7 @@ static int parse_argv(int argc, char *argv[]) {
                         arg_import_flags_mask |= IMPORT_FORCE;
                         break;
 
-                case ARG_FORMAT:
+                case ARG_FORMAT: {
                         if (streq(optarg, "help")) {
                                 DUMP_STRING_TABLE_FROM(
                                                 import_compress_type,
@@ -1137,8 +1142,29 @@ static int parse_argv(int argc, char *argv[]) {
                                 return 0;
                         }
 
-                        arg_format = strdup(optarg);
+                        _cleanup_free_ char *opt_format = NULL, *opt_level = NULL;
+
+                        r = split_pair(optarg, ":", &opt_format, &opt_level);
+                        if (r != 0 && r != -EINVAL) {
+                                return r;
+                        }
+
+                        if (opt_format) {
+                                arg_format = TAKE_PTR(opt_format);
+                        } else {
+                                arg_format = strdup(optarg);
+                        }
+
+                        if (opt_level) {
+                                int32_t tmp_level;
+                                r = safe_atoi32(opt_level, &tmp_level);
+                                if (r < 0)
+                                        return log_error_errno(r, "Failed to parse --format= setting: %s", optarg);
+                                arg_compress_level = tmp_level;
+                        }
+
                         break;
+                }
 
                 case ARG_JSON:
                         r = parse_json_argument(optarg, &arg_json_format_flags);
