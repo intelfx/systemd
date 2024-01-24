@@ -3,6 +3,7 @@
 #include <getopt.h>
 #include <locale.h>
 
+#include "parse-util.h"
 #include "sd-event.h"
 #include "sd-id128.h"
 
@@ -24,6 +25,7 @@
 
 static ImportCompressType arg_compress = IMPORT_COMPRESS_UNKNOWN;
 static ImageClass arg_class = IMAGE_MACHINE;
+static ImportCompressLevel arg_compress_level = IMPORT_COMPRESS_LEVEL_UNKNOWN;
 
 static int interrupt_signal_handler(sd_event_source *s, const struct signalfd_siginfo *si, void *userdata) {
         log_notice("Transfer aborted.");
@@ -93,7 +95,7 @@ static int export_tar(int argc, char *argv[], void *userdata) {
         if (r < 0)
                 return log_error_errno(r, "Failed to allocate exporter: %m");
 
-        r = tar_export_start(export, local, fd, arg_compress);
+        r = tar_export_start(export, local, fd, arg_compress, arg_compress_level);
         if (r < 0)
                 return log_error_errno(r, "Failed to export image: %m");
 
@@ -167,7 +169,7 @@ static int export_raw(int argc, char *argv[], void *userdata) {
         if (r < 0)
                 return log_error_errno(r, "Failed to allocate exporter: %m");
 
-        r = raw_export_start(export, local, fd, arg_compress);
+        r = raw_export_start(export, local, fd, arg_compress, arg_compress_level);
         if (r < 0)
                 return log_error_errno(r, "Failed to export image: %m");
 
@@ -205,6 +207,7 @@ static int parse_argv(int argc, char *argv[]) {
         enum {
                 ARG_VERSION = 0x100,
                 ARG_FORMAT,
+                ARG_LEVEL,
                 ARG_CLASS,
         };
 
@@ -212,6 +215,7 @@ static int parse_argv(int argc, char *argv[]) {
                 { "help",    no_argument,       NULL, 'h'         },
                 { "version", no_argument,       NULL, ARG_VERSION },
                 { "format",  required_argument, NULL, ARG_FORMAT  },
+                { "level",   required_argument, NULL, ARG_LEVEL   },
                 { "class",   required_argument, NULL, ARG_CLASS   },
                 {}
         };
@@ -238,6 +242,15 @@ static int parse_argv(int argc, char *argv[]) {
                                 return log_error_errno(r, "Unknown format: %s", optarg);
                         arg_compress = r;
                         break;
+
+                case ARG_LEVEL: {
+                        int tmp_level;
+                        r = safe_atoi(optarg, &tmp_level);
+                        if (r < 0 || tmp_level == IMPORT_COMPRESS_LEVEL_UNKNOWN)
+                                return log_error_errno(r, "Invalid compression level: %s", optarg);
+                        arg_compress_level = tmp_level;
+                        break;
+                }
 
                 case ARG_CLASS:
                         arg_class = image_class_from_string(optarg);
