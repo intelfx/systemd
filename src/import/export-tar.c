@@ -283,6 +283,7 @@ int tar_export_start(
                 const char *path,
                 int fd,
                 ImportCompressType compress,
+                ImportCompressLevel level,
                 ImportFlags flags) {
 
         _cleanup_close_ int sfd = -EBADF;
@@ -336,7 +337,7 @@ int tar_export_start(
                 }
         }
 
-        r = import_compress_init(&e->compress, compress);
+        r = import_compress_init(&e->compress, compress, level);
         if (r < 0)
                 return r;
 

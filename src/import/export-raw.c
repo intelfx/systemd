@@ -280,7 +280,7 @@ static int reflink_snapshot(int fd, const char *path) {
         return new_fd;
 }
 
-int raw_export_start(RawExport *e, const char *path, int fd, ImportCompressType compress) {
+int raw_export_start(RawExport *e, const char *path, int fd, ImportCompressType compress, ImportCompressLevel level) {
         _cleanup_close_ int sfd = -EBADF, tfd = -EBADF;
         int r;
 
@@ -318,7 +318,7 @@ int raw_export_start(RawExport *e, const char *path, int fd, ImportCompressType 
         else
                 e->input_fd = TAKE_FD(sfd);
 
-        r = import_compress_init(&e->compress, compress);
+        r = import_compress_init(&e->compress, compress, level);
         if (r < 0)
                 return r;
 
