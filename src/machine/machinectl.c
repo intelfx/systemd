@@ -100,7 +100,7 @@ static bool arg_now = false;
 static bool arg_force = false;
 static ImportVerify arg_verify = IMPORT_VERIFY_SIGNATURE;
 static MachineRunner arg_runner = RUNNER_NSPAWN;
-static ImportCompressType arg_format = IMPORT_COMPRESS_UNKNOWN;
+static char *arg_format = NULL;
 static const char *arg_uid = NULL;
 static char **arg_setenv = NULL;
 static unsigned arg_max_addresses = 1;
@@ -108,6 +108,7 @@ static RuntimeScope arg_runtime_scope = RUNTIME_SCOPE_SYSTEM;
 
 STATIC_DESTRUCTOR_REGISTER(arg_property, strv_freep);
 STATIC_DESTRUCTOR_REGISTER(arg_setenv, strv_freep);
+STATIC_DESTRUCTOR_REGISTER(arg_format, freep);
 
 static OutputFlags get_output_flags(void) {
         return
@@ -2391,10 +2392,7 @@ static int parse_argv(int argc, char *argv[]) {
                                 return 0;
                         }
 
-                        r = import_compress_type_from_string(optarg);
-                        if (r < 0)
-                                return log_error_errno(r, "Failed to parse --format= setting: %s", optarg);
-                        arg_format = r;
+                        arg_format = strdup(optarg);
                         break;
 
                 case ARG_UID:
