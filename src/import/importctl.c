@@ -41,9 +41,11 @@ static ImportFlags arg_import_flags_mask = 0; /* Indicates which flags have been
 static bool arg_quiet = false;
 static bool arg_ask_password = true;
 static ImportVerify arg_verify = IMPORT_VERIFY_SIGNATURE;
-static ImportCompressType arg_format = IMPORT_COMPRESS_UNKNOWN;
+static char *arg_format = NULL;
 static JsonFormatFlags arg_json_format_flags = JSON_FORMAT_OFF;
 static ImageClass arg_image_class = _IMAGE_CLASS_INVALID;
+
+STATIC_DESTRUCTOR_REGISTER(arg_format, freep);
 
 #define PROGRESS_PREFIX "Total: "
 
@@ -500,8 +502,10 @@ static int export_tar(int argc, char *argv[], void *userdata) {
         path = empty_or_dash_to_null(path);
 
         if (path) {
-                if (arg_format == IMPORT_COMPRESS_UNKNOWN)
-                        arg_format = tar_filename_to_compression(path);
+                if (strempty(arg_format)) {
+                        free(arg_format);
+                        arg_format = strdup(import_compress_type_to_string(tar_filename_to_compression(path)));
+                }
 
                 fd = open(path, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC|O_NOCTTY, 0666);
                 if (fd < 0)
@@ -518,7 +522,7 @@ static int export_tar(int argc, char *argv[], void *userdata) {
                                 "shs",
                                 local,
                                 fd >= 0 ? fd : STDOUT_FILENO,
-                                arg_format != IMPORT_COMPRESS_UNKNOWN ? import_compress_type_to_string(arg_format) : NULL);
+                                arg_format);
         } else {
                 r = bus_message_new_method_call(bus, &m, bus_import_mgr, "ExportTarEx");
                 if (r < 0)
@@ -530,7 +534,7 @@ static int export_tar(int argc, char *argv[], void *userdata) {
                                 local,
                                 image_class_to_string(arg_image_class),
                                 fd >= 0 ? fd : STDOUT_FILENO,
-                                arg_format != IMPORT_COMPRESS_UNKNOWN ? import_compress_type_to_string(arg_format) : NULL,
+                                arg_format,
                                 /* flags= */ UINT64_C(0));
         }
         if (r < 0)
@@ -560,8 +564,10 @@ static int export_raw(int argc, char *argv[], void *userdata) {
         path = empty_or_dash_to_null(path);
 
         if (path) {
-                if (arg_format == IMPORT_COMPRESS_UNKNOWN)
-                        arg_format = raw_filename_to_compression(path);
+                if (strempty(arg_format)) {
+                        free(arg_format);
+                        arg_format = strdup(import_compress_type_to_string(tar_filename_to_compression(path)));
+                }
 
                 fd = open(path, O_WRONLY|O_CREAT|O_TRUNC|O_CLOEXEC|O_NOCTTY, 0666);
                 if (fd < 0)
@@ -578,7 +584,7 @@ static int export_raw(int argc, char *argv[], void *userdata) {
                                 "shs",
                                 local,
                                 fd >= 0 ? fd : STDOUT_FILENO,
-                                arg_format != IMPORT_COMPRESS_UNKNOWN ? import_compress_type_to_string(arg_format) : NULL);
+                                arg_format);
         } else {
                 r = bus_message_new_method_call(bus, &m, bus_import_mgr, "ExportRawEx");
                 if (r < 0)
@@ -590,7 +596,7 @@ static int export_raw(int argc, char *argv[], void *userdata) {
                                 local,
                                 image_class_to_string(arg_image_class),
                                 fd >= 0 ? fd : STDOUT_FILENO,
-                                arg_format != IMPORT_COMPRESS_UNKNOWN ? import_compress_type_to_string(arg_format) : NULL,
+                                arg_format,
                                 /* flags= */ UINT64_C(0));
         }
         if (r < 0)
@@ -1131,10 +1137,7 @@ static int parse_argv(int argc, char *argv[]) {
                                 return 0;
                         }
 
-                        r = import_compress_type_from_string(optarg);
-                        if (r < 0)
-                                return log_error_errno(r, "Failed to parse --format= setting: %s", optarg);
-                        arg_format = r;
+                        arg_format = strdup(optarg);
                         break;
 
                 case ARG_JSON:
