@@ -320,7 +320,7 @@ int gethostname_full(GetHostnameFlags flags, char **ret) {
                 return -errno;
 
         s = u.nodename;
-        if (isempty(s) || streq(s, "(none)") ||
+        if (isempty(s) || streq(s, "(none)") || streq(s, FALLBACK_HOSTNAME) ||
             (!FLAGS_SET(flags, GET_HOSTNAME_ALLOW_LOCALHOST) && is_localhost(s)) ||
             (FLAGS_SET(flags, GET_HOSTNAME_SHORT) && s[0] == '.')) {
                 if (!FLAGS_SET(flags, GET_HOSTNAME_FALLBACK_DEFAULT))
