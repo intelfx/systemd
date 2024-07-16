@@ -2459,3 +2459,24 @@ static const char* const managed_oom_preference_table[_MANAGED_OOM_PREFERENCE_MA
 };
 
 DEFINE_STRING_TABLE_LOOKUP(managed_oom_preference, ManagedOOMPreference);
+
+CGroupZSwapWriteback zswap_writeback_from_string(const char *s) {
+        if (s == NULL)
+                return _CGROUP_ZSWAP_WRITEBACK_INVALID;
+        else if (streq(s, "unset"))
+                return CGROUP_ZSWAP_WRITEBACK_UNSET;
+        else if (streq(s, "default"))
+                return CGROUP_ZSWAP_WRITEBACK_DEFAULT;
+        else
+                return parse_boolean(s);
+}
+
+const char* zswap_writeback_to_string(CGroupZSwapWriteback a) {
+        switch (a) {
+        case CGROUP_ZSWAP_WRITEBACK_UNSET: return "unset";
+        case CGROUP_ZSWAP_WRITEBACK_DEFAULT: return "default";
+        case CGROUP_ZSWAP_WRITEBACK_NO:
+        case CGROUP_ZSWAP_WRITEBACK_YES: return yes_no(a);
+        default: return NULL;
+        }
+}

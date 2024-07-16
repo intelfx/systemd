@@ -64,6 +64,10 @@ static inline const char* one_zero(bool b) {
         return b ? "1" : "0";
 }
 
+static inline const char* one_zero_minusone(int a) {
+        return a < 0 ? "-1" : one_zero(a);
+}
+
 static inline const char* enable_disable(bool b) {
         return b ? "enable" : "disable";
 }

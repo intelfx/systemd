@@ -352,6 +352,17 @@ typedef enum ManagedOOMPreference {
 const char* managed_oom_preference_to_string(ManagedOOMPreference a) _const_;
 ManagedOOMPreference managed_oom_preference_from_string(const char *s) _pure_;
 
+typedef enum CGroupZSwapWriteback {
+        CGROUP_ZSWAP_WRITEBACK_UNSET = -2,
+        CGROUP_ZSWAP_WRITEBACK_DEFAULT = -1,
+        CGROUP_ZSWAP_WRITEBACK_NO = 0,
+        CGROUP_ZSWAP_WRITEBACK_YES = 1,
+        _CGROUP_ZSWAP_WRITEBACK_INVALID = -EINVAL,
+} CGroupZSwapWriteback;
+
+const char* zswap_writeback_to_string(CGroupZSwapWriteback a) _const_;
+CGroupZSwapWriteback zswap_writeback_from_string(const char *s) _pure_;
+
 /* The structure to pass to name_to_handle_at() on cgroupfs2 */
 typedef union {
         struct file_handle file_handle;

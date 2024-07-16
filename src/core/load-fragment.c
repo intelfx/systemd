@@ -10,6 +10,7 @@
 #include <sched.h>
 #include <sys/resource.h>
 
+#include "cgroup-util.h"
 #include "sd-messages.h"
 
 #include "af-list.h"
@@ -157,6 +158,7 @@ DEFINE_CONFIG_PARSE_PTR(config_parse_exec_mount_propagation_flag, mount_propagat
 DEFINE_CONFIG_PARSE_ENUM_WITH_DEFAULT(config_parse_numa_policy, mpol, int, -1, "Invalid NUMA policy type");
 DEFINE_CONFIG_PARSE_ENUM(config_parse_status_unit_format, status_unit_format, StatusUnitFormat, "Failed to parse status unit format");
 DEFINE_CONFIG_PARSE_ENUM_FULL(config_parse_socket_timestamping, socket_timestamping_from_string_harder, SocketTimestamping, "Failed to parse timestamping precision");
+DEFINE_CONFIG_PARSE_ENUM(config_parse_memory_zswap_writeback, zswap_writeback, CGroupZSwapWriteback, "Failed to parse MemoryZSwapWriteback=");
 
 int config_parse_cpu_shares(
                 const char *unit,
