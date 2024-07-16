@@ -22,6 +22,8 @@
 #include "string-util.h"
 #include "strv.h"
 #include "varlink.h"
+//#include "sd-bus.h"
+//#include "unit.h"
 
 BUS_DEFINE_PROPERTY_GET(bus_property_get_tasks_max, "t", CGroupTasksMax, cgroup_tasks_max_resolve);
 BUS_DEFINE_PROPERTY_GET_ENUM(bus_property_get_cgroup_pressure_watch, cgroup_pressure_watch, CGroupPressureWatch);
@@ -29,6 +31,7 @@ BUS_DEFINE_PROPERTY_GET_ENUM(bus_property_get_cgroup_pressure_watch, cgroup_pres
 static BUS_DEFINE_PROPERTY_GET_ENUM(property_get_cgroup_device_policy, cgroup_device_policy, CGroupDevicePolicy);
 static BUS_DEFINE_PROPERTY_GET_ENUM(property_get_managed_oom_mode, managed_oom_mode, ManagedOOMMode);
 static BUS_DEFINE_PROPERTY_GET_ENUM(property_get_managed_oom_preference, managed_oom_preference, ManagedOOMPreference);
+static BUS_DEFINE_PROPERTY_GET_ENUM(property_get_zswap_writeback, zswap_writeback, CGroupZSwapWriteback);
 
 static BUS_DEFINE_PROPERTY_GET_GLOBAL(property_get_blockio_ast, "a(st)", 0);
 
@@ -410,7 +413,7 @@ const sd_bus_vtable bus_cgroup_vtable[] = {
         SD_BUS_PROPERTY("StartupMemorySwapMax", "t", NULL, offsetof(CGroupContext, startup_memory_swap_max), 0),
         SD_BUS_PROPERTY("MemoryZSwapMax", "t", NULL, offsetof(CGroupContext, memory_zswap_max), 0),
         SD_BUS_PROPERTY("StartupMemoryZSwapMax", "t", NULL, offsetof(CGroupContext, startup_memory_zswap_max), 0),
-        SD_BUS_PROPERTY("MemoryZSwapWriteback", "b", bus_property_get_bool, offsetof(CGroupContext, memory_zswap_writeback), 0),
+        SD_BUS_PROPERTY("MemoryZSwapWriteback", "s", property_get_zswap_writeback, offsetof(CGroupContext, memory_zswap_writeback), 0),
         SD_BUS_PROPERTY("DevicePolicy", "s", property_get_cgroup_device_policy, offsetof(CGroupContext, device_policy), 0),
         SD_BUS_PROPERTY("DeviceAllow", "a(ss)", property_get_device_allow, 0, 0),
         SD_BUS_PROPERTY("TasksAccounting", "b", bus_property_get_bool, offsetof(CGroupContext, tasks_accounting), 0),
@@ -1175,8 +1178,26 @@ int bus_cgroup_set_property(
         if (streq(name, "MemoryMaxScale"))
                 return bus_cgroup_set_memory_scale(u, name, &c->memory_max, message, flags, error);
 
-        if (streq(name, "MemoryZSwapWriteback"))
-                return bus_cgroup_set_boolean(u, name, &c->memory_zswap_writeback, CGROUP_MASK_MEMORY, message, flags, error);
+       if (streq(name, "MemoryZSwapWriteback")) {
+                const char *mode;
+                CGroupZSwapWriteback m;
+
+                r = sd_bus_message_read(message, "s", &mode);
+                if (r < 0)
+                        return r;
+
+                m = zswap_writeback_from_string(mode);
+                if (m == -EINVAL)
+                        return m;
+
+                if (!UNIT_WRITE_FLAGS_NOOP(flags)) {
+                        c->memory_zswap_writeback = m;
+                        unit_invalidate_cgroup(u, CGROUP_MASK_MEMORY);
+                        unit_write_settingf(u, flags, name, "MemoryZSwapWriteback=%s", mode);
+                }
+
+                return 1;
+        }
 
         if (streq(name, "TasksAccounting"))
                 return bus_cgroup_set_boolean(u, name, &c->tasks_accounting, CGROUP_MASK_PIDS, message, flags, error);
