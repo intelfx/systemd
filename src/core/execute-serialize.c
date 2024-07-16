@@ -5,6 +5,7 @@
 #include "af-list.h"
 #include "capability-util.h"
 #include "cgroup.h"
+//#include "cgroup-util.h"
 #include "dissect-image.h"
 #include "dynamic-user.h"
 #include "escape.h"
@@ -199,9 +200,11 @@ static int exec_cgroup_context_serialize(const CGroupContext *c, FILE *f) {
                         return r;
         }
 
-        r = serialize_bool(f, "exec-cgroup-context-memory-zswap-writeback", c->memory_zswap_writeback);
-        if (r < 0)
-                return r;
+        if (c->memory_zswap_writeback != CGROUP_ZSWAP_WRITEBACK_UNSET) {
+                r = serialize_item(f, "exec-cgroup-context-memory-zswap-writeback", zswap_writeback_to_string(c->memory_zswap_writeback));
+                if (r < 0)
+                        return r;
+        }
 
         if (c->tasks_max.value != UINT64_MAX) {
                 r = serialize_item_format(f, "exec-cgroup-context-tasks-max-value", "%" PRIu64, c->tasks_max.value);
@@ -546,10 +549,9 @@ static int exec_cgroup_context_deserialize(CGroupContext *c, FILE *f) {
                         if (r < 0)
                                 return r;
                 } else if ((val = startswith(l, "exec-cgroup-context-memory-zswap-writeback="))) {
-                        r = parse_boolean(val);
-                        if (r < 0)
-                                return r;
-                        c->memory_zswap_writeback = r;
+                        c->memory_zswap_writeback = zswap_writeback_from_string(val);
+                        if (c->memory_zswap_writeback == _CGROUP_ZSWAP_WRITEBACK_INVALID)
+                                return -EINVAL;
                 } else if ((val = startswith(l, "exec-cgroup-context-tasks-max-value="))) {
                         r = safe_atou64(val, &c->tasks_max.value);
                         if (r < 0)

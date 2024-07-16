@@ -255,3 +255,13 @@ typedef enum ManagedOOMPreference {
 } ManagedOOMPreference;
 
 DECLARE_STRING_TABLE_LOOKUP(managed_oom_preference, ManagedOOMPreference);
+
+typedef enum CGroupZSwapWriteback {
+        CGROUP_ZSWAP_WRITEBACK_UNSET = -2,
+        CGROUP_ZSWAP_WRITEBACK_DEFAULT = -1,
+        CGROUP_ZSWAP_WRITEBACK_NO = 0,
+        CGROUP_ZSWAP_WRITEBACK_YES = 1,
+        _CGROUP_ZSWAP_WRITEBACK_INVALID = -EINVAL,
+} CGroupZSwapWriteback;
+
+DECLARE_STRING_TABLE_LOOKUP(zswap_writeback, CGroupZSwapWriteback);

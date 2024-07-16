@@ -48,6 +48,7 @@
 #include "special.h"
 #include "stdio-util.h"
 #include "string-table.h"
+#include "string-util-fundamental.h"
 #include "string-util.h"
 #include "strv.h"
 #include "virt.h"
@@ -171,7 +172,7 @@ void cgroup_context_init(CGroupContext *c) {
                 .memory_zswap_max = CGROUP_LIMIT_MAX,
                 .startup_memory_zswap_max = CGROUP_LIMIT_MAX,
 
-                .memory_zswap_writeback = true,
+                .memory_zswap_writeback = CGROUP_ZSWAP_WRITEBACK_UNSET,
 
                 .io_weight = CGROUP_WEIGHT_INVALID,
                 .startup_io_weight = CGROUP_WEIGHT_INVALID,
@@ -552,7 +553,7 @@ void cgroup_context_dump(Unit *u, FILE* f, const char *prefix) {
                 prefix, c->startup_memory_swap_max, format_cgroup_memory_limit_comparison(u, "StartupMemorySwapMax", cdi, sizeof(cdi)),
                 prefix, c->memory_zswap_max, format_cgroup_memory_limit_comparison(u, "MemoryZSwapMax", cdj, sizeof(cdj)),
                 prefix, c->startup_memory_zswap_max, format_cgroup_memory_limit_comparison(u, "StartupMemoryZSwapMax", cdk, sizeof(cdk)),
-                prefix, yes_no(c->memory_zswap_writeback),
+                prefix, zswap_writeback_to_string(c->memory_zswap_writeback),
                 prefix, cgroup_tasks_max_resolve(&c->tasks_max),
                 prefix, cgroup_device_policy_to_string(c->device_policy),
                 prefix, strempty(disable_controllers_str),
@@ -1499,7 +1500,9 @@ static void cgroup_context_apply(
                 cgroup_apply_memory_limit(u, "memory.zswap.max", zswap_max);
 
                 (void) set_attribute_and_warn(u, "memory.oom.group", one_zero(c->memory_oom_group));
-                (void) set_attribute_and_warn(u, "memory.zswap.writeback", one_zero(c->memory_zswap_writeback));
+                if (c->memory_zswap_writeback != CGROUP_ZSWAP_WRITEBACK_UNSET)
+                        (void) set_attribute_and_warn(u, "memory.zswap.writeback",
+                                                      one_zero_minusone(c->memory_zswap_writeback));
         }
 
         if (apply_mask & CGROUP_MASK_PIDS) {
