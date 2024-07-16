@@ -168,6 +168,7 @@ CONFIG_PARSER_PROTOTYPE(config_parse_open_file);
 CONFIG_PARSER_PROTOTYPE(config_parse_pressure_watch);
 CONFIG_PARSER_PROTOTYPE(config_parse_cgroup_nft_set);
 CONFIG_PARSER_PROTOTYPE(config_parse_mount_node);
+CONFIG_PARSER_PROTOTYPE(config_parse_memory_zswap_writeback);
 CONFIG_PARSER_PROTOTYPE(config_parse_concurrency_max);
 CONFIG_PARSER_PROTOTYPE(config_parse_bind_network_interface);
 CONFIG_PARSER_PROTOTYPE(config_parse_exec_memory_thp);
