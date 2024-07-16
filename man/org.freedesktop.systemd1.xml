@@ -3066,7 +3066,7 @@ node /org/freedesktop/systemd1/unit/avahi_2ddaemon_2eservice {
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
       readonly t StartupMemoryZSwapMax = ...;
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
-      readonly b MemoryZSwapWriteback = ...;
+      readonly s MemoryZSwapWriteback = '...';
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
       readonly s DevicePolicy = '...';
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
@@ -5362,7 +5362,7 @@ node /org/freedesktop/systemd1/unit/avahi_2ddaemon_2esocket {
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
       readonly t StartupMemoryZSwapMax = ...;
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
-      readonly b MemoryZSwapWriteback = ...;
+      readonly s MemoryZSwapWriteback = '...';
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
       readonly s DevicePolicy = '...';
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
@@ -7471,7 +7471,7 @@ node /org/freedesktop/systemd1/unit/home_2emount {
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
       readonly t StartupMemoryZSwapMax = ...;
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
-      readonly b MemoryZSwapWriteback = ...;
+      readonly s MemoryZSwapWriteback = '...';
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
       readonly s DevicePolicy = '...';
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
@@ -9545,7 +9545,7 @@ node /org/freedesktop/systemd1/unit/dev_2dsda3_2eswap {
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
       readonly t StartupMemoryZSwapMax = ...;
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
-      readonly b MemoryZSwapWriteback = ...;
+      readonly s MemoryZSwapWriteback = '...';
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
       readonly s DevicePolicy = '...';
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
@@ -11436,7 +11436,7 @@ node /org/freedesktop/systemd1/unit/system_2eslice {
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
       readonly t StartupMemoryZSwapMax = ...;
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
-      readonly b MemoryZSwapWriteback = ...;
+      readonly s MemoryZSwapWriteback = '...';
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
       readonly s DevicePolicy = '...';
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
@@ -12044,7 +12044,7 @@ node /org/freedesktop/systemd1/unit/session_2d1_2escope {
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
       readonly t StartupMemoryZSwapMax = ...;
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
-      readonly b MemoryZSwapWriteback = ...;
+      readonly s MemoryZSwapWriteback = '...';
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")
       readonly s DevicePolicy = '...';
       @org.freedesktop.DBus.Property.EmitsChangedSignal("false")

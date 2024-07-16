@@ -2391,7 +2391,7 @@ static const BusProperty cgroup_properties[] = {
         { "DelegateSubgroup",                      bus_append_string                             },
         { "ManagedOOMMemoryPressureLimit",         bus_append_parse_permyriad                    },
         { "MemoryAccounting",                      bus_append_parse_boolean                      },
-        { "MemoryZSwapWriteback",                  bus_append_parse_boolean                      },
+        { "MemoryZSwapWriteback",                  bus_append_string                             },
         { "IOAccounting",                          bus_append_parse_boolean                      },
         { "TasksAccounting",                       bus_append_parse_boolean                      },
         { "IPAccounting",                          bus_append_parse_boolean                      },

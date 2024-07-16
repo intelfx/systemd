@@ -168,6 +168,7 @@ DEFINE_CONFIG_PARSE_PTR(config_parse_bpf_delegate_maps, bpf_delegate_maps_from_s
 DEFINE_CONFIG_PARSE_PTR(config_parse_bpf_delegate_programs, bpf_delegate_programs_from_string, uint64_t);
 DEFINE_CONFIG_PARSE_PTR(config_parse_bpf_delegate_attachments, bpf_delegate_attachments_from_string, uint64_t);
 DEFINE_CONFIG_PARSE_ENUM(config_parse_exec_memory_thp, exec_memory_thp, ExecMemoryTHP);
+DEFINE_CONFIG_PARSE_ENUM(config_parse_memory_zswap_writeback, zswap_writeback, CGroupZSwapWriteback);
 
 bool contains_instance_specifier_superset(const char *s) {
         const char *p, *q;
