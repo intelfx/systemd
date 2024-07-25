@@ -545,6 +545,7 @@ static int bus_append_cgroup_property(sd_bus_message *m, const char *field, cons
                               "ManagedOOMMemoryPressure",
                               "ManagedOOMPreference",
                               "MemoryPressureWatch",
+                              "MemoryZSwapWriteback",
                               "DelegateSubgroup"))
                 return bus_append_string(m, field, eq);
 
@@ -563,7 +564,6 @@ static int bus_append_cgroup_property(sd_bus_message *m, const char *field, cons
 
         if (STR_IN_SET(field, "CPUAccounting",
                               "MemoryAccounting",
-                              "MemoryZSwapWriteback",
                               "IOAccounting",
                               "BlockIOAccounting",
                               "TasksAccounting",
