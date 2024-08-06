@@ -6,6 +6,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#define SD_JOURNAL_SUPPRESS_LOCATION
 #include "sd-journal.h"
 
 #include "alloc-util.h"
@@ -25,6 +26,12 @@ static const char *arg_namespace = NULL;
 static int arg_priority = LOG_INFO;
 static int arg_stderr_priority = -1;
 static bool arg_level_prefix = true;
+
+static enum {
+        PROGRAM_CAT = 0,  /* invoked as systemd-cat */
+        PROGRAM_ECHO,     /* invoked as systemd-echo */
+        _PROGRAM_MAX
+} arg_program = PROGRAM_CAT;
 
 static int help(void) {
         _cleanup_free_ char *link = NULL;
@@ -52,6 +59,29 @@ static int help(void) {
         return 0;
 }
 
+static int help_echo(void) {
+        _cleanup_free_ char *link = NULL;
+        int r;
+
+        r = terminal_urlify_man("systemd-echo", "1", &link);
+        if (r < 0)
+                return log_oom();
+
+        printf("%s [OPTIONS...] COMMAND ...\n"
+               "\n%sWrite a line to the journal.%s\n\n"
+               "  -h --help                      Show this help\n"
+               "     --version                   Show package version\n"
+               "  -t --identifier=STRING         Set syslog identifier\n"
+               "  -p --priority=PRIORITY         Set priority value (0..7)\n"
+               "\nSee the %s for details.\n",
+               program_invocation_short_name,
+               ansi_highlight(),
+               ansi_normal(),
+               link);
+
+        return 0;
+}
+
 static int parse_argv(int argc, char *argv[]) {
 
         enum {
@@ -61,26 +91,44 @@ static int parse_argv(int argc, char *argv[]) {
                 ARG_NAMESPACE,
         };
 
-        static const struct option options[] = {
-                { "help",            no_argument,       NULL, 'h'                 },
-                { "version",         no_argument,       NULL, ARG_VERSION         },
-                { "identifier",      required_argument, NULL, 't'                 },
-                { "priority",        required_argument, NULL, 'p'                 },
-                { "stderr-priority", required_argument, NULL, ARG_STDERR_PRIORITY },
-                { "level-prefix",    required_argument, NULL, ARG_LEVEL_PREFIX    },
-                { "namespace",       required_argument, NULL, ARG_NAMESPACE       },
-                {}
+        enum {
+                OPTIONS_MAX = 8,
+        };
+
+        static const struct option options[_PROGRAM_MAX][OPTIONS_MAX] = {
+                [PROGRAM_CAT] = {
+                        { "help",            no_argument,       NULL, 'h'                 },
+                        { "version",         no_argument,       NULL, ARG_VERSION         },
+                        { "identifier",      required_argument, NULL, 't'                 },
+                        { "priority",        required_argument, NULL, 'p'                 },
+                        { "stderr-priority", required_argument, NULL, ARG_STDERR_PRIORITY },
+                        { "level-prefix",    required_argument, NULL, ARG_LEVEL_PREFIX    },
+                        { "namespace",       required_argument, NULL, ARG_NAMESPACE       },
+                        {}
+                },
+                [PROGRAM_ECHO] = {
+                        { "help",            no_argument,       NULL, 'h'                 },
+                        { "version",         no_argument,       NULL, ARG_VERSION         },
+                        { "identifier",      required_argument, NULL, 't'                 },
+                        { "priority",        required_argument, NULL, 'p'                 },
+                        {}
+                },
+        };
+        static const char *optstrings[_PROGRAM_MAX] = {
+                [PROGRAM_CAT] = "+ht:p:",
+                [PROGRAM_ECHO] = "ht:p:",
         };
 
         int c, r;
 
         assert(argc >= 0);
         assert(argv);
+        assert(arg_program >= 0 && arg_program < _PROGRAM_MAX);
 
         /* Resetting to 0 forces the invocation of an internal initialization routine of getopt_long()
          * that checks for GNU extensions in optstring ('-' or '+' at the beginning). */
         optind = 0;
-        while ((c = getopt_long(argc, argv, "+ht:p:", options, NULL)) >= 0)
+        while ((c = getopt_long(argc, argv, optstrings[arg_program], options[arg_program], NULL)) >= 0)
 
                 switch (c) {
 
@@ -129,15 +177,9 @@ static int parse_argv(int argc, char *argv[]) {
         return 1;
 }
 
-static int run(int argc, char *argv[]) {
-        _cleanup_close_ int outfd = -EBADF, errfd = -EBADF, saved_stderr = -EBADF;
+static int run_cat(int argc, char *argv[]) {
         int r;
-
-        log_setup();
-
-        r = parse_argv(argc, argv);
-        if (r <= 0)
-                return r;
+        _cleanup_close_ int outfd = -EBADF, errfd = -EBADF, saved_stderr = -EBADF;
 
         outfd = sd_journal_stream_fd_with_namespace(arg_namespace, arg_identifier, arg_priority, arg_level_prefix);
         if (outfd < 0)
@@ -180,6 +222,32 @@ static int run(int argc, char *argv[]) {
                 (void) dup3(saved_stderr, STDERR_FILENO, 0);
 
         return log_error_errno(r, "Failed to execute process: %m");
+}
+
+static int run_echo(int argc, char *argv[]) {
+
+}
+
+static int run(int argc, char *argv[]) {
+        int r;
+
+        log_setup();
+
+        if (invoked_as(argv, "systemd-echo"))
+                arg_program = PROGRAM_ECHO;
+
+        r = parse_argv(argc, argv);
+        if (r <= 0)
+                return r;
+
+        switch (arg_program) {
+                case PROGRAM_CAT:
+                        return run_cat(argc, argv);
+                case PROGRAM_ECHO:
+                        return run_echo(argc, argv);
+                default:
+                        assert_not_reached();
+        }
 }
 
 DEFINE_MAIN_FUNCTION(run);
