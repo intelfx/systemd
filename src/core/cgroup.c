@@ -4688,13 +4688,13 @@ int unit_get_ip_accounting(
                 CGroupIPAccountingMetric metric,
                 uint64_t *ret) {
 
-        uint64_t value;
+        uint64_t value, *last;
+        bool updated = false;
         int fd, r;
 
         assert(u);
         assert(metric >= 0);
         assert(metric < _CGROUP_IP_ACCOUNTING_METRIC_MAX);
-        assert(ret);
 
         if (!UNIT_CGROUP_BOOL(u, ip_accounting))
                 return -ENODATA;
@@ -4702,6 +4702,9 @@ int unit_get_ip_accounting(
         CGroupRuntime *crt = unit_get_cgroup_runtime(u);
         if (!crt)
                 return -ENODATA;
+        if (!crt->cgroup_path)
+                /* If the cgroup is already gone, we try to find the last cached value. */
+                goto finish;
 
         fd = IN_SET(metric, CGROUP_IP_INGRESS_BYTES, CGROUP_IP_INGRESS_PACKETS) ?
                 crt->ip_accounting_ingress_map_fd :
@@ -4716,13 +4719,24 @@ int unit_get_ip_accounting(
         if (r < 0)
                 return r;
 
+finish:
+        last = &crt->ip_accounting_last[metric];
+
+        if (updated)
+                *last = value;
+        else if (*last != UINT64_MAX)
+                value = *last;
+        else
+                return -ENODATA;
+
         /* Add in additional metrics from a previous runtime. Note that when reexecing/reloading the daemon we compile
          * all BPF programs and maps anew, but serialize the old counters. When deserializing we store them in the
          * ip_accounting_extra[] field, and add them in here transparently. */
+        value += crt->ip_accounting_extra[metric];
 
-        *ret = value + crt->ip_accounting_extra[metric];
-
-        return r;
+        if (ret)
+                *ret = value;
+        return 0;
 }
 
 static uint64_t unit_get_effective_limit_one(Unit *u, CGroupLimitType type) {
@@ -4961,6 +4975,8 @@ static int cgroup_runtime_reset_ip_accounting(CGroupRuntime *crt) {
                 RET_GATHER(r, bpf_firewall_reset_accounting(crt->ip_accounting_egress_map_fd));
 
         zero(crt->ip_accounting_extra);
+        FOREACH_ELEMENT(i, crt->ip_accounting_last)
+                *i = UINT64_MAX;
 
         return r;
 }
@@ -5353,6 +5369,8 @@ int cgroup_runtime_serialize(Unit *u, FILE *f, FDSet *fds) {
         for (CGroupIPAccountingMetric m = 0; m < _CGROUP_IP_ACCOUNTING_METRIC_MAX; m++) {
                 uint64_t v;
 
+                /* NOTE: this _will_ be incorrect if a unit is de/serialized
+                 * repeatedly without resetting the BPF maps in between */
                 r = unit_get_ip_accounting(u, m, &v);
                 if (r >= 0)
                         (void) serialize_item_format(f, ip_accounting_metric_field_to_string(m), "%" PRIu64, v);

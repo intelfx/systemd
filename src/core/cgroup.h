@@ -333,6 +333,8 @@ typedef struct CGroupRuntime {
         /* IP BPF Firewalling/accounting */
         int ip_accounting_ingress_map_fd;
         int ip_accounting_egress_map_fd;
+        uint64_t ip_accounting_last[_CGROUP_IP_ACCOUNTING_METRIC_MAX];
+        /* additional usage not reflected in the BPF maps */
         uint64_t ip_accounting_extra[_CGROUP_IP_ACCOUNTING_METRIC_MAX];
 
         int ipv4_allow_map_fd;
