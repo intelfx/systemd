@@ -3581,7 +3581,8 @@ void unit_prune_cgroup(Unit *u) {
         /* All IO metrics are read at once from the underlying cgroup, so issue just a single call */
         (void) unit_get_io_accounting(u, /* metric = */ 0, /* allow_cache = */ false, /* ret = */ NULL);
 
-        /* We do not cache IP metrics here because the firewall objects are not freed with cgroups */
+        for (CGroupIPAccountingMetric metric = 0; metric < _CGROUP_IP_ACCOUNTING_METRIC_MAX; metric++)
+                (void) unit_get_ip_accounting(u, metric, /* ret = */ NULL);
 
 #if BPF_FRAMEWORK
         (void) bpf_restrict_fs_cleanup(u); /* Remove cgroup from the global LSM BPF map */
