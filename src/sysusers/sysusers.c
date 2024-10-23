@@ -88,6 +88,8 @@ typedef struct Item {
 
         bool uid_set;
 
+        bool locked;
+
         bool todo_user;
         bool todo_group;
 } Item;
@@ -658,7 +660,7 @@ static int write_temporary_shadow(
                         .sp_max = -1,
                         .sp_warn = -1,
                         .sp_inact = -1,
-                        .sp_expire = -1,
+                        .sp_expire = i->locked ? 1 : -1, /* Negative expiration means "unset". Expiration 0 or 1 means "locked" */
                         .sp_flag = ULONG_MAX, /* this appears to be what everybody does ... */
                 };
 
@@ -1711,10 +1713,17 @@ static int parse_line(
                 return log_syntax(NULL, LOG_ERR, fname, line, SYNTHETIC_ERRNO(EINVAL),
                                   "Trailing garbage.");
 
-        /* Verify action */
-        if (strlen(action) != 1)
-                return log_syntax(NULL, LOG_ERR, fname, line, SYNTHETIC_ERRNO(EINVAL),
-                                  "Unknown modifier '%s'.", action);
+        if (isempty(action))
+                return log_syntax(NULL, LOG_ERR, fname, line, SYNTHETIC_ERRNO(EBADMSG),
+                                  "Empty command specification.");
+
+        bool locked = false;
+        for (int pos = 1; action[pos]; pos++)
+                if (action[pos] == '!' && !locked)
+                        locked = true;
+                else
+                        return log_syntax(NULL, LOG_ERR, fname, line, SYNTHETIC_ERRNO(EBADMSG),
+                                          "Unknown modifiers in command '%s'.", action);
 
         if (!IN_SET(action[0], ADD_USER, ADD_GROUP, ADD_MEMBER, ADD_RANGE))
                 return log_syntax(NULL, LOG_ERR, fname, line, SYNTHETIC_ERRNO(EBADMSG),
@@ -1797,6 +1806,10 @@ static int parse_line(
         switch (action[0]) {
 
         case ADD_RANGE:
+                if (locked)
+                        return log_syntax(NULL, LOG_ERR, fname, line, SYNTHETIC_ERRNO(EINVAL),
+                                          "Flag '!' not permitted on lines of type 'r'.");
+
                 if (resolved_name)
                         return log_syntax(NULL, LOG_ERR, fname, line, SYNTHETIC_ERRNO(EINVAL),
                                           "Lines of type 'r' don't take a name field.");
@@ -1823,6 +1836,10 @@ static int parse_line(
                 if (!name)
                         return log_syntax(NULL, LOG_ERR, fname, line, SYNTHETIC_ERRNO(EINVAL),
                                           "Lines of type 'm' require a user name in the second field.");
+
+                if (locked)
+                        return log_syntax(NULL, LOG_ERR, fname, line, SYNTHETIC_ERRNO(EINVAL),
+                                          "Flag '!' not permitted on lines of type 'm'.");
 
                 if (!resolved_id)
                         return log_syntax(NULL, LOG_ERR, fname, line, SYNTHETIC_ERRNO(EINVAL),
@@ -1890,6 +1907,7 @@ static int parse_line(
                 i->description = TAKE_PTR(resolved_description);
                 i->home = TAKE_PTR(resolved_home);
                 i->shell = TAKE_PTR(resolved_shell);
+                i->locked = locked;
 
                 h = c->users;
                 break;
@@ -1898,6 +1916,10 @@ static int parse_line(
                 if (!name)
                         return log_syntax(NULL, LOG_ERR, fname, line, SYNTHETIC_ERRNO(EINVAL),
                                           "Lines of type 'g' require a user name in the second field.");
+
+                if (locked)
+                        return log_syntax(NULL, LOG_ERR, fname, line, SYNTHETIC_ERRNO(EINVAL),
+                                          "Flag '!' not permitted on lines of type 'g'.");
 
                 if (description || home || shell)
                         return log_syntax(NULL, LOG_ERR, fname, line, SYNTHETIC_ERRNO(EINVAL),
