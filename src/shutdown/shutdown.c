@@ -414,7 +414,7 @@ int main(int argc, char *argv[]) {
                    LOG_TARGET_JOURNAL_OR_KMSG,
                    LOG_TARGET_SYSLOG_OR_KMSG,
                    LOG_TARGET_KMSG))
-                bump_sysctl_printk_log_level(LOG_WARNING);
+                bump_sysctl_printk_log_level(LOG_INFO);
 
         init_watchdog();
 
