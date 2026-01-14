@@ -326,6 +326,23 @@ static void notify_supervisor(void) {
                                   arg_exit_code, arg_verb);
 }
 
+static void run_system_shutdown(const char * const *dirs) {
+        const char *arguments[] = {
+                NULL, /* Filled in by execute_directories(), when needed */
+                arg_verb,
+                NULL,
+        };
+        (void) execute_directories(
+                        "system-shutdown",
+                        dirs,
+                        DEFAULT_TIMEOUT_USEC,
+                        /* callbacks= */ NULL,
+                        /* callback_args= */ NULL,
+                        (char**) arguments,
+                        /* envp= */ NULL,
+                        EXEC_DIR_PARALLEL | EXEC_DIR_IGNORE_ERRORS);
+}
+
 int main(int argc, char *argv[]) {
         static const char* const dirs[] = {
                 SYSTEM_SHUTDOWN_PATH,
@@ -428,8 +445,9 @@ int main(int argc, char *argv[]) {
              need_dm_detach = !in_container, need_md_detach = !in_container,
              can_exitrd = !in_container && !in_initrd() && access("/run/initramfs/shutdown", X_OK) >= 0;
 
-        /* Unmount all mountpoints, swaps, and loopback devices */
-        for (bool last_try = false;;) {
+        /* Unmount all mountpoints, swaps, and loopback devices.
+         * After the first attempt, run shutdown scripts. */
+        for (bool first_try = true, last_try = false;;) {
                 bool changed = false;
 
                 (void) watchdog_ping();
@@ -499,6 +517,13 @@ int main(int argc, char *argv[]) {
                                 log_error_errno(r, "Unable to detach DM devices: %m");
                 }
 
+                if (first_try) {
+                        /* After we've done exactly one iteration of the detach loop, run shutdown scripts.
+                         * If we had to skip anything, with luck, this might help us finish the rest. */
+                        first_try = false;
+                        run_system_shutdown(dirs);
+                }
+
                 if (!need_umount && !need_swapoff && !need_loop_detach && !need_dm_detach
                             && !need_md_detach) {
                         log_info("All filesystems, swaps, loop devices, MD devices and DM devices detached.");
@@ -540,21 +565,6 @@ int main(int argc, char *argv[]) {
          * data. */
         watchdog_close(/* disarm= */ false);
         watchdog_free_device();
-
-        const char *arguments[] = {
-                NULL, /* Filled in by execute_directories(), when needed */
-                arg_verb,
-                NULL,
-        };
-        (void) execute_directories(
-                        "system-shutdown",
-                        dirs,
-                        DEFAULT_TIMEOUT_USEC,
-                        /* callbacks= */ NULL,
-                        /* callback_args= */ NULL,
-                        (char**) arguments,
-                        /* envp= */ NULL,
-                        EXEC_DIR_PARALLEL | EXEC_DIR_IGNORE_ERRORS);
 
         (void) rlimit_nofile_safe();
 
