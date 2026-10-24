@@ -515,6 +515,16 @@ static int parse_argv(int argc, char *argv[]) {
                         arg_password_source = PASSWORD_SOURCE_KEYFILE;
                         break;
 
+                OPTION_LONG("empty", NULL,
+                            "Enroll an empty password"):
+                        if (arg_enroll_type >= 0)
+                                return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
+                                                       "Multiple operations specified at once, refusing.");
+
+                        arg_enroll_type = ENROLL_PASSWORD;
+                        arg_password_source = PASSWORD_SOURCE_EMPTY;
+                        break;
+
                 OPTION_LONG("recovery-key", NULL,
                             "Enroll a recovery key"):
                         if (arg_enroll_type >= 0)
@@ -1046,6 +1056,9 @@ int enroll_now(
 
                 case PASSWORD_SOURCE_KEYFILE:
                         return enroll_keyfile(c, cd, volume_key);
+
+                case PASSWORD_SOURCE_EMPTY:
+                        return enroll_empty(c, cd, volume_key);
 
                 default:
                         assert_not_reached();

@@ -40,6 +40,7 @@ NEWPASSWORD=foo systemd-cryptenroll --unlock-key-file=/tmp/password  --password 
 head -c 64 /dev/urandom >/tmp/keyfile
 chmod 0600 /tmp/keyfile
 systemd-cryptenroll --unlock-key-file=/tmp/password --keyfile=/tmp/keyfile "$IMAGE"
+systemd-cryptenroll --unlock-key-file=/tmp/keyfile --empty "$IMAGE"
 for _ in {0..9}; do
     systemd-cryptenroll --unlock-key-file=/tmp/password --recovery-key "$IMAGE"
 done

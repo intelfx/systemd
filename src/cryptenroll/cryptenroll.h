@@ -37,6 +37,7 @@ typedef enum WipeScope {
 typedef enum PasswordSource {
         PASSWORD_SOURCE_PROMPT,         /* c->passphrase, $NEWPASSWORD, or askpw */
         PASSWORD_SOURCE_KEYFILE,        /* contents of c->keyfile */
+        PASSWORD_SOURCE_EMPTY,          /* empty passphrase */
         _PASSWORD_SOURCE_MAX,
         _PASSWORD_SOURCE_INVALID = -EINVAL,
 } PasswordSource;

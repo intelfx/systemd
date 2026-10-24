@@ -43,7 +43,7 @@ _systemd_cryptenroll() {
     local cur=${COMP_WORDS[COMP_CWORD]} prev=${COMP_WORDS[COMP_CWORD-1]} words cword
     local -A OPTS=(
         [STANDALONE]='-h --help --version
-                     --password --recovery-key --list-devices
+                     --password --empty --recovery-key --list-devices
                      --unlock-empty --unlock-headless --firstboot'
         [ARG]='--unlock-key-file
                --keyfile

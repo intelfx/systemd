@@ -348,3 +348,36 @@ int enroll_keyfile(
         log_info("New keyfile enrolled as key slot %i.", keyslot);
         return keyslot;
 }
+
+int enroll_empty(
+                const EnrollContext *c,
+                struct crypt_device *cd,
+                const struct iovec *volume_key) {
+
+        const char *node;
+        int r, keyslot;
+
+        assert(c);
+        assert(cd);
+        assert(iovec_is_set(volume_key));
+
+        assert_se(node = sym_crypt_get_device_name(cd));
+
+        /* Key derivation cannot strengthen an empty password, hence don't waste time on it */
+        r = cryptsetup_set_minimal_pbkdf(cd);
+        if (r < 0)
+                return log_error_errno(r, "Failed to set minimal PBKDF: %m");
+
+        keyslot = sym_crypt_keyslot_add_by_volume_key(
+                        cd,
+                        CRYPT_ANY_SLOT,
+                        volume_key->iov_base,
+                        volume_key->iov_len,
+                        "",
+                        0);
+        if (keyslot < 0)
+                return log_error_errno(keyslot, "Failed to add empty password to %s: %m", node);
+
+        log_info("New empty password enrolled as key slot %i.", keyslot);
+        return keyslot;
+}

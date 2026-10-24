@@ -361,6 +361,21 @@
       </varlistentry>
 
       <varlistentry>
+        <term><option>--empty</option></term>
+
+        <listitem><para>Enroll an empty password/passphrase, i.e. allow unlocking the volume without any
+        credentials. Such a key slot may be unlocked with <option>--unlock-empty</option> or
+        <option>--unlock-headless</option>, and by
+        <citerefentry><refentrytitle>systemd-cryptsetup</refentrytitle><manvolnum>8</manvolnum></citerefentry>
+        if the <option>try-empty-password</option> option is set in
+        <citerefentry><refentrytitle>crypttab</refentrytitle><manvolnum>5</manvolnum></citerefentry>. It may
+        be removed again with <option>--wipe-slot=empty</option>. This is primarily useful in provisioning
+        scenarios, where a placeholder slot is replaced by stronger credentials later on.</para>
+
+        <xi:include href="version-info.xml" xpointer="v263"/></listitem>
+      </varlistentry>
+
+      <varlistentry>
         <term><option>--recovery-key</option></term>
 
         <listitem><para>Enroll a recovery key. Recovery keys are mostly identical to passphrases, but are
