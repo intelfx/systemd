@@ -13,6 +13,7 @@ cryptenroll_wipe_and_check() {(
 
 at_exit() {
     rm -f "${IMAGE:-}" "${VL_IMAGE:-}" /tmp/cryptenroll.out /tmp/password /tmp/keyfile
+    rm -f /etc/cryptsetup-keys.d/cryptenroll-test.key
 }
 
 trap at_exit EXIT
@@ -41,6 +42,10 @@ head -c 64 /dev/urandom >/tmp/keyfile
 chmod 0600 /tmp/keyfile
 systemd-cryptenroll --unlock-key-file=/tmp/password --keyfile=/tmp/keyfile "$IMAGE"
 systemd-cryptenroll --unlock-key-file=/tmp/keyfile --empty "$IMAGE"
+systemd-cryptenroll --unlock-empty --auto-keyfile=cryptenroll-test "$IMAGE"
+(! systemd-cryptenroll --unlock-empty --auto-keyfile=cryptenroll-test "$IMAGE")
+test "$(stat -c %a /etc/cryptsetup-keys.d/cryptenroll-test.key)" = 400
+systemd-cryptenroll --unlock-key-file=/etc/cryptsetup-keys.d/cryptenroll-test.key "$IMAGE"
 for _ in {0..9}; do
     systemd-cryptenroll --unlock-key-file=/tmp/password --recovery-key "$IMAGE"
 done

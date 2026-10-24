@@ -376,6 +376,29 @@
       </varlistentry>
 
       <varlistentry>
+        <term><option>--auto-keyfile</option></term>
+        <term><option>--auto-keyfile=<replaceable>VOLUME</replaceable></option></term>
+
+        <listitem><para>Generate a random key, enroll it as a password/passphrase, and store it in
+        <filename>/etc/cryptsetup-keys.d/<replaceable>VOLUME</replaceable>.key</filename>, where it is
+        automatically picked up by
+        <citerefentry><refentrytitle>systemd-cryptsetup</refentrytitle><manvolnum>8</manvolnum></citerefentry>
+        when activating the volume <replaceable>VOLUME</replaceable> without an explicitly configured key
+        file. <replaceable>VOLUME</replaceable> must match the name the volume is activated under, i.e. the
+        first field of its entry in
+        <citerefentry><refentrytitle>crypttab</refentrytitle><manvolnum>5</manvolnum></citerefentry>. If not
+        specified, the name of the currently active mapping of the volume is used, and if the volume is not
+        active, <literal>luks-<replaceable>UUID</replaceable></literal> is assumed. The key file is created
+        with access mode 0400 and an existing file is never overwritten.</para>
+
+        <para>Note that the key file must be accessible at the time the volume is activated, hence this is
+        not useful for volumes that <filename>/etc/</filename> itself resides on, unless the key file is
+        made available to the initrd by other means.</para>
+
+        <xi:include href="version-info.xml" xpointer="v263"/></listitem>
+      </varlistentry>
+
+      <varlistentry>
         <term><option>--recovery-key</option></term>
 
         <listitem><para>Enroll a recovery key. Recovery keys are mostly identical to passphrases, but are

@@ -38,6 +38,7 @@ typedef enum PasswordSource {
         PASSWORD_SOURCE_PROMPT,         /* c->passphrase, $NEWPASSWORD, or askpw */
         PASSWORD_SOURCE_KEYFILE,        /* contents of c->keyfile */
         PASSWORD_SOURCE_EMPTY,          /* empty passphrase */
+        PASSWORD_SOURCE_AUTO_KEYFILE,   /* randomly generated, stored in /etc/cryptsetup-keys.d/ */
         _PASSWORD_SOURCE_MAX,
         _PASSWORD_SOURCE_INVALID = -EINVAL,
 } PasswordSource;
@@ -78,6 +79,7 @@ typedef struct EnrollContext {
          * a regular password slot in the LUKS2 header in all cases. */
         PasswordSource password_source;
         char *keyfile;                  /* PASSWORD_SOURCE_KEYFILE: file to read the key from */
+        char *auto_keyfile_volume;      /* PASSWORD_SOURCE_AUTO_KEYFILE: volume name, NULL to autodetect */
 
         /* FIDO2 */
         char *fido2_device;
@@ -139,6 +141,8 @@ typedef struct EnrollContext {
         }
 
 void enroll_context_done(EnrollContext *c);
+
+int write_key_file(const char *path, const struct iovec *key);
 
 /* Opens & loads the LUKS2 superblock of c->node, refuses homed-managed volumes, and (if ret_volume_key is
  * non-NULL) unlocks it according to c->unlock_type, returning the volume key. */

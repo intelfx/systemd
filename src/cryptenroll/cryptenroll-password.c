@@ -1,9 +1,15 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 
+#include <unistd.h>
+
+#include "sd-device.h"
+
 #include "alloc-util.h"
 #include "ask-password-api.h"
+#include "blockdev-util.h"
 #include "cryptenroll-password.h"
 #include "cryptsetup-util.h"
+#include "device-util.h"
 #include "env-util.h"
 #include "errno-util.h"
 #include "escape.h"
@@ -11,8 +17,12 @@
 #include "iovec-util.h"
 #include "log.h"
 #include "password-quality-util.h"
+#include "path-util.h"
+#include "random-util.h"
 #include "string-util.h"
 #include "strv.h"
+
+#define AUTO_KEYFILE_SIZE 64U
 
 int load_volume_key_empty(
                 const EnrollContext *c,
@@ -379,5 +389,181 @@ int enroll_empty(
                 return log_error_errno(keyslot, "Failed to add empty password to %s: %m", node);
 
         log_info("New empty password enrolled as key slot %i.", keyslot);
+        return keyslot;
+}
+
+static int find_active_volume(struct crypt_device *cd, char **ret_volume, dev_t *ret_devnum) {
+        _cleanup_(sd_device_enumerator_unrefp) sd_device_enumerator *e = NULL;
+        _cleanup_free_ char *uuid = NULL, *pattern = NULL, *volume = NULL;
+        dev_t devnum = 0;
+        const char *u;
+        int r;
+
+        assert(cd);
+        assert(ret_volume);
+        assert(ret_devnum);
+
+        /* Looks for an active dm-crypt mapping of the LUKS2 volume and returns its name. The DM UUID
+         * cryptsetup assigns to such mappings is "CRYPT-LUKS2-<LUKS UUID without dashes>-<volume name>". */
+
+        u = sym_crypt_get_uuid(cd);
+        if (!u)
+                return log_error_errno(SYNTHETIC_ERRNO(ENODATA), "LUKS2 volume has no UUID.");
+
+        uuid = strdup(u);
+        if (!uuid)
+                return log_oom();
+        delete_chars(uuid, "-");
+
+        pattern = strjoin("CRYPT-LUKS2-", uuid, "-*");
+        if (!pattern)
+                return log_oom();
+
+        r = sd_device_enumerator_new(&e);
+        if (r < 0)
+                return log_error_errno(r, "Failed to allocate device enumerator: %m");
+
+        r = sd_device_enumerator_add_match_subsystem(e, "block", /* match= */ true);
+        if (r < 0)
+                return log_error_errno(r, "Failed to add subsystem match: %m");
+
+        r = sd_device_enumerator_add_match_property(e, "DM_UUID", pattern);
+        if (r < 0)
+                return log_error_errno(r, "Failed to add property match: %m");
+
+        FOREACH_DEVICE(e, dev) {
+                const char *name;
+
+                r = sd_device_get_property_value(dev, "DM_NAME", &name);
+                if (r < 0) {
+                        log_device_debug_errno(dev, r, "Failed to get DM_NAME property, ignoring: %m");
+                        continue;
+                }
+
+                if (volume)
+                        return log_error_errno(SYNTHETIC_ERRNO(ENOTUNIQ),
+                                               "Multiple active mappings found for LUKS2 volume (%s, %s), please specify volume name explicitly.",
+                                               volume, name);
+
+                r = sd_device_get_devnum(dev, &devnum);
+                if (r < 0)
+                        return log_device_error_errno(dev, r, "Failed to get device number: %m");
+
+                volume = strdup(name);
+                if (!volume)
+                        return log_oom();
+        }
+
+        if (!volume) {
+                *ret_volume = NULL;
+                *ret_devnum = 0;
+                return 0;
+        }
+
+        *ret_volume = TAKE_PTR(volume);
+        *ret_devnum = devnum;
+        return 1;
+}
+
+int enroll_auto_keyfile(
+                const EnrollContext *c,
+                struct crypt_device *cd,
+                const struct iovec *volume_key) {
+
+        _cleanup_(iovec_done_erase) struct iovec key = {};
+        _cleanup_free_ char *volume = NULL, *fn = NULL, *path = NULL;
+        dev_t volume_devnum = 0;
+        const char *node;
+        int r, q, keyslot;
+
+        assert(c);
+        assert(cd);
+        assert(iovec_is_set(volume_key));
+
+        assert_se(node = sym_crypt_get_device_name(cd));
+
+        /* systemd-cryptsetup looks for /etc/cryptsetup-keys.d/<volume>.key, where <volume> is the name the
+         * volume is activated under (i.e. the first column in /etc/crypttab). */
+
+        if (c->auto_keyfile_volume) {
+                volume = strdup(c->auto_keyfile_volume);
+                if (!volume)
+                        return log_oom();
+        } else {
+                r = find_active_volume(cd, &volume, &volume_devnum);
+                if (r < 0)
+                        return r;
+                if (r > 0)
+                        log_info("Using name '%s' of active volume for keyfile.", volume);
+                else {
+                        const char *u = sym_crypt_get_uuid(cd);
+                        if (!u)
+                                return log_error_errno(SYNTHETIC_ERRNO(ENODATA), "LUKS2 volume has no UUID.");
+
+                        volume = strjoin("luks-", u);
+                        if (!volume)
+                                return log_oom();
+
+                        log_notice("Volume %s is not active, assuming it is activated as '%s'. "
+                                   "Use --auto-keyfile=VOLUME to specify the volume name explicitly.",
+                                   node, volume);
+                }
+        }
+
+        fn = strjoin(volume, ".key");
+        if (!fn)
+                return log_oom();
+
+        if (!filename_is_valid(fn))
+                return log_error_errno(SYNTHETIC_ERRNO(EINVAL), "Volume name '%s' is not suitable as keyfile name.", volume);
+
+        path = path_join("/etc/cryptsetup-keys.d", fn);
+        if (!path)
+                return log_oom();
+
+        if (access(path, F_OK) >= 0)
+                return log_error_errno(SYNTHETIC_ERRNO(EEXIST), "Keyfile %s already exists, refusing.", path);
+        if (errno != ENOENT)
+                return log_error_errno(errno, "Failed to check if %s exists: %m", path);
+
+        if (volume_devnum != 0) {
+                dev_t etc_devnum;
+
+                r = get_block_device("/etc", &etc_devnum);
+                if (r < 0)
+                        log_debug_errno(r, "Failed to determine block device backing /etc/, ignoring: %m");
+                else if (r > 0 && etc_devnum == volume_devnum)
+                        log_warning("/etc/ is located on volume '%s' itself, the keyfile will not be accessible before the volume is unlocked.", volume);
+        }
+
+        r = crypto_random_bytes_allocate_iovec(AUTO_KEYFILE_SIZE, &key);
+        if (r < 0)
+                return log_error_errno(r, "Failed to generate keyfile: %m");
+
+        /* The key has high entropy, hence key derivation would only slow down unlocking */
+        r = cryptsetup_set_minimal_pbkdf(cd);
+        if (r < 0)
+                return log_error_errno(r, "Failed to set minimal PBKDF: %m");
+
+        keyslot = sym_crypt_keyslot_add_by_volume_key(
+                        cd,
+                        CRYPT_ANY_SLOT,
+                        volume_key->iov_base,
+                        volume_key->iov_len,
+                        key.iov_base,
+                        key.iov_len);
+        if (keyslot < 0)
+                return log_error_errno(keyslot, "Failed to add keyfile to %s: %m", node);
+
+        r = write_key_file(path, &key);
+        if (r < 0) {
+                q = sym_crypt_keyslot_destroy(cd, keyslot);
+                if (q < 0)
+                        log_debug_errno(q, "Unable to remove key slot we just added again, can't rollback, sorry: %m");
+
+                return r;
+        }
+
+        log_info("New keyfile %s enrolled as key slot %i.", path, keyslot);
         return keyslot;
 }

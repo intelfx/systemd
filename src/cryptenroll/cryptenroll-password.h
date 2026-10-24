@@ -11,3 +11,4 @@ int load_volume_key_password(const EnrollContext *c, struct crypt_device *cd, st
 int enroll_password(const EnrollContext *c, struct crypt_device *cd, const struct iovec *volume_key);
 int enroll_keyfile(const EnrollContext *c, struct crypt_device *cd, const struct iovec *volume_key);
 int enroll_empty(const EnrollContext *c, struct crypt_device *cd, const struct iovec *volume_key);
+int enroll_auto_keyfile(const EnrollContext *c, struct crypt_device *cd, const struct iovec *volume_key);

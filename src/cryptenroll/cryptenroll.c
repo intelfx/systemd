@@ -25,15 +25,19 @@
 #include "cryptsetup-util.h"
 #include "dlopen-note.h"
 #include "extract-word.h"
+#include "fd-util.h"
 #include "initrd-util.h"
+#include "io-util.h"
 #include "libfido2-util.h"
 #include "limits-util.h"
 #include "log.h"
 #include "main-func.h"
 #include "memory-util.h"
+#include "mkdir.h"
 #include "pager.h"
 #include "parse-argument.h"
 #include "parse-util.h"
+#include "path-util.h"
 #include "pkcs11-util.h"
 #include "process-util.h"
 #include "prompt-util.h"
@@ -41,6 +45,7 @@
 #include "string-util.h"
 #include "terminal-util.h"
 #include "time-util.h"
+#include "tmpfile-util.h"
 #include "tpm2-pcr.h"
 #include "tpm2-util.h"
 #include "verbs.h"
@@ -63,6 +68,7 @@ DEFINE_PRIVATE_STRING_TABLE_LOOKUP_FROM_STRING_WITH_BOOLEAN(tpm2_with_pin, Tpm2W
 static EnrollType arg_enroll_type = _ENROLL_TYPE_INVALID;
 static PasswordSource arg_password_source = PASSWORD_SOURCE_PROMPT;
 static char *arg_keyfile = NULL;
+static char *arg_auto_keyfile_volume = NULL;
 static char *arg_unlock_keyfile = NULL;
 static UnlockType arg_unlock_type = UNLOCK_PASSWORD;
 static char *arg_unlock_fido2_device = NULL;
@@ -105,6 +111,7 @@ static int arg_fido2_cred_alg = 0;
 assert_cc(sizeof(arg_wipe_slots_mask) * 8 >= _ENROLL_TYPE_MAX);
 
 STATIC_DESTRUCTOR_REGISTER(arg_keyfile, freep);
+STATIC_DESTRUCTOR_REGISTER(arg_auto_keyfile_volume, freep);
 STATIC_DESTRUCTOR_REGISTER(arg_unlock_keyfile, freep);
 STATIC_DESTRUCTOR_REGISTER(arg_unlock_fido2_device, freep);
 STATIC_DESTRUCTOR_REGISTER(arg_unlock_tpm2_device, freep);
@@ -180,6 +187,7 @@ void enroll_context_done(EnrollContext *c) {
         c->unlock_password = erase_and_free(c->unlock_password);
         c->passphrase = erase_and_free(c->passphrase);
         c->keyfile = mfree(c->keyfile);
+        c->auto_keyfile_volume = mfree(c->auto_keyfile_volume);
         c->fido2_device = mfree(c->fido2_device);
         c->fido2_salt_file = mfree(c->fido2_salt_file);
         c->fido2_pin = erase_and_free(c->fido2_pin);
@@ -192,6 +200,45 @@ void enroll_context_done(EnrollContext *c) {
         c->tpm2_pcrlock = mfree(c->tpm2_pcrlock);
         c->wipe_slots = mfree(c->wipe_slots);
         c->link = sd_varlink_unref(c->link);
+}
+
+int write_key_file(const char *path, const struct iovec *key) {
+        int r;
+
+        assert(path);
+        assert(key);
+
+        /* Writes key material to a new file with mode 0400, creating missing parent directories with mode
+         * 0700. Refuses to replace an existing file, so that we never lose access to a previously enrolled
+         * key slot. */
+
+        r = mkdir_parents(path, 0700);
+        if (r < 0)
+                return log_error_errno(r, "Failed to create parent directories of %s: %m", path);
+
+        int dir_fd = AT_FDCWD;
+        _cleanup_free_ char *t = NULL;
+        _cleanup_close_ int fd = open_tmpfile_linkable_at(dir_fd, path, O_WRONLY|O_CLOEXEC, &t);
+        if (fd < 0)
+                return log_error_errno(fd, "Failed to create temporary file for %s: %m", path);
+
+        CLEANUP_TMPFILE_AT(dir_fd, t);
+
+        if (fchmod(fd, 0400) < 0)
+                return log_error_errno(errno, "Failed to set access mode of %s: %m", path);
+
+        r = loop_write(fd, key->iov_base, key->iov_len);
+        if (r < 0)
+                return log_error_errno(r, "Failed to write %s: %m", path);
+
+        r = link_tmpfile_at(fd, dir_fd, t, path, LINK_TMPFILE_SYNC);
+        if (r == -EEXIST)
+                return log_error_errno(r, "File %s already exists, refusing to overwrite.", path);
+        if (r < 0)
+                return log_error_errno(r, "Failed to move %s into place: %m", path);
+
+        t = mfree(t); /* disarm CLEANUP_TMPFILE_AT */
+        return 0;
 }
 
 static int resolve_default_node(const char *path, char **ret) {
@@ -523,6 +570,26 @@ static int parse_argv(int argc, char *argv[]) {
 
                         arg_enroll_type = ENROLL_PASSWORD;
                         arg_password_source = PASSWORD_SOURCE_EMPTY;
+                        break;
+
+                OPTION_LONG_FLAGS(OPTION_OPTIONAL_ARG, "auto-keyfile", "VOLUME",
+                                  "Generate and enroll a key file in /etc/cryptsetup-keys.d/"):
+                        if (arg_enroll_type >= 0)
+                                return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
+                                                       "Multiple operations specified at once, refusing.");
+
+                        if (!isempty(opts.arg)) {
+                                if (!filename_is_valid(opts.arg))
+                                        return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
+                                                               "Volume name is not valid: %s", opts.arg);
+
+                                r = free_and_strdup_warn(&arg_auto_keyfile_volume, opts.arg);
+                                if (r < 0)
+                                        return r;
+                        }
+
+                        arg_enroll_type = ENROLL_PASSWORD;
+                        arg_password_source = PASSWORD_SOURCE_AUTO_KEYFILE;
                         break;
 
                 OPTION_LONG("recovery-key", NULL,
@@ -1003,6 +1070,7 @@ static int enroll_context_from_args(EnrollContext *c) {
 
         if (strdup_to(&c->node, arg_node) < 0 ||
             strdup_to(&c->keyfile, arg_keyfile) < 0 ||
+            strdup_to(&c->auto_keyfile_volume, arg_auto_keyfile_volume) < 0 ||
             strdup_to(&c->unlock_keyfile, arg_unlock_keyfile) < 0 ||
             strdup_to(&c->unlock_fido2_device, arg_unlock_fido2_device) < 0 ||
             strdup_to(&c->unlock_tpm2_device, arg_unlock_tpm2_device) < 0 ||
@@ -1059,6 +1127,9 @@ int enroll_now(
 
                 case PASSWORD_SOURCE_EMPTY:
                         return enroll_empty(c, cd, volume_key);
+
+                case PASSWORD_SOURCE_AUTO_KEYFILE:
+                        return enroll_auto_keyfile(c, cd, volume_key);
 
                 default:
                         assert_not_reached();
