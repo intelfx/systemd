@@ -35,7 +35,7 @@ _systemd-cryptenroll_prompt_suppress() {
 # Unlock methods are mutually exclusive with each other
 local unlock='--unlock-empty --unlock-key-file --unlock-fido2-device --unlock-tpm2-device --unlock-headless'
 # Enrollment operations are mutually exclusive with each other
-local enroll='--password --recovery-key --pkcs11-token-uri --fido2-device --tpm2-device --tpm2-device-key --firstboot'
+local enroll='--password --keyfile --recovery-key --pkcs11-token-uri --fido2-device --tpm2-device --tpm2-device-key --firstboot'
 
 _arguments -s \
     '(- *)'{-h,--help}'[Show this help]' \
@@ -53,6 +53,7 @@ _arguments -s \
     "($unlock)--unlock-tpm2-device=[Use a TPM2 device to unlock the volume]:TPM2 device:_systemd-cryptenroll_tpm2_device auto" \
     "($unlock)--unlock-headless[Try the 'headless' unlock mechanisms in turn]" \
     "($enroll)--password[Enroll a user-supplied password]" \
+    "($enroll)--keyfile=[Enroll the contents of a key file as a password]:key file:_files" \
     "($enroll)--recovery-key[Enroll a recovery key]" \
     "($enroll)--pkcs11-token-uri=[Enroll a PKCS#11 security token or list them]:PKCS#11 token URI:(auto list pkcs11:)" \
     "($enroll)--fido2-device=[Enroll a FIDO2-HMAC security token or list them]:FIDO2 device:_systemd-cryptenroll_fido2_device auto list" \

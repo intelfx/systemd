@@ -9,3 +9,4 @@ int load_volume_key_keyfile(const EnrollContext *c, struct crypt_device *cd, str
 
 int load_volume_key_password(const EnrollContext *c, struct crypt_device *cd, struct iovec *ret_vk);
 int enroll_password(const EnrollContext *c, struct crypt_device *cd, const struct iovec *volume_key);
+int enroll_keyfile(const EnrollContext *c, struct crypt_device *cd, const struct iovec *volume_key);

@@ -46,6 +46,7 @@ _systemd_cryptenroll() {
                      --password --recovery-key --list-devices
                      --unlock-empty --unlock-headless --firstboot'
         [ARG]='--unlock-key-file
+               --keyfile
                --unlock-fido2-device
                --unlock-tpm2-device
                --prompt-suppress
@@ -79,7 +80,7 @@ _systemd_cryptenroll() {
 
     if __contains_word "$prev" ${OPTS[ARG]}; then
         case $prev in
-            --unlock-key-file|--fido2-salt-file|--tpm2-device-key|--tpm2-public-key|--tpm2-signature|--tpm2-pcrlock)
+            --unlock-key-file|--keyfile|--fido2-salt-file|--tpm2-device-key|--tpm2-public-key|--tpm2-signature|--tpm2-pcrlock)
                 comps=$(compgen -A file -- "$cur")
                 compopt -o filenames
                 ;;

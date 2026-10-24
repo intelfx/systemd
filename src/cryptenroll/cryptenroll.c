@@ -61,6 +61,8 @@ static const char * const tpm2_with_pin_table[_TPM2_WITH_PIN_MAX] = {
 DEFINE_PRIVATE_STRING_TABLE_LOOKUP_FROM_STRING_WITH_BOOLEAN(tpm2_with_pin, Tpm2WithPin, TPM2_WITH_PIN_YES);
 
 static EnrollType arg_enroll_type = _ENROLL_TYPE_INVALID;
+static PasswordSource arg_password_source = PASSWORD_SOURCE_PROMPT;
+static char *arg_keyfile = NULL;
 static char *arg_unlock_keyfile = NULL;
 static UnlockType arg_unlock_type = UNLOCK_PASSWORD;
 static char *arg_unlock_fido2_device = NULL;
@@ -102,6 +104,7 @@ static int arg_fido2_cred_alg = 0;
 
 assert_cc(sizeof(arg_wipe_slots_mask) * 8 >= _ENROLL_TYPE_MAX);
 
+STATIC_DESTRUCTOR_REGISTER(arg_keyfile, freep);
 STATIC_DESTRUCTOR_REGISTER(arg_unlock_keyfile, freep);
 STATIC_DESTRUCTOR_REGISTER(arg_unlock_fido2_device, freep);
 STATIC_DESTRUCTOR_REGISTER(arg_unlock_tpm2_device, freep);
@@ -176,6 +179,7 @@ void enroll_context_done(EnrollContext *c) {
         c->unlock_tpm2_device = mfree(c->unlock_tpm2_device);
         c->unlock_password = erase_and_free(c->unlock_password);
         c->passphrase = erase_and_free(c->passphrase);
+        c->keyfile = mfree(c->keyfile);
         c->fido2_device = mfree(c->fido2_device);
         c->fido2_salt_file = mfree(c->fido2_salt_file);
         c->fido2_pin = erase_and_free(c->fido2_pin);
@@ -495,6 +499,20 @@ static int parse_argv(int argc, char *argv[]) {
                                                        "Multiple operations specified at once, refusing.");
 
                         arg_enroll_type = ENROLL_PASSWORD;
+                        break;
+
+                OPTION_LONG("keyfile", "PATH",
+                            "Enroll the contents of a key file as a password"):
+                        if (arg_enroll_type >= 0)
+                                return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
+                                                       "Multiple operations specified at once, refusing.");
+
+                        r = parse_path_argument(opts.arg, /* suppress_root= */ true, &arg_keyfile);
+                        if (r < 0)
+                                return r;
+
+                        arg_enroll_type = ENROLL_PASSWORD;
+                        arg_password_source = PASSWORD_SOURCE_KEYFILE;
                         break;
 
                 OPTION_LONG("recovery-key", NULL,
@@ -959,6 +977,7 @@ static int enroll_context_from_args(EnrollContext *c) {
         *c = ENROLL_CONTEXT_NULL;
 
         c->enroll_type = arg_enroll_type;
+        c->password_source = arg_password_source;
         c->unlock_type = arg_unlock_type;
         c->fido2_parameters_in_header = arg_fido2_parameters_in_header;
         c->fido2_lock_with = arg_fido2_lock_with;
@@ -973,6 +992,7 @@ static int enroll_context_from_args(EnrollContext *c) {
         c->wipe_slots_mask = arg_wipe_slots_mask;
 
         if (strdup_to(&c->node, arg_node) < 0 ||
+            strdup_to(&c->keyfile, arg_keyfile) < 0 ||
             strdup_to(&c->unlock_keyfile, arg_unlock_keyfile) < 0 ||
             strdup_to(&c->unlock_fido2_device, arg_unlock_fido2_device) < 0 ||
             strdup_to(&c->unlock_tpm2_device, arg_unlock_tpm2_device) < 0 ||
@@ -1019,7 +1039,17 @@ int enroll_now(
         switch (c->enroll_type) {
 
         case ENROLL_PASSWORD:
-                return enroll_password(c, cd, volume_key);
+                switch (c->password_source) {
+
+                case PASSWORD_SOURCE_PROMPT:
+                        return enroll_password(c, cd, volume_key);
+
+                case PASSWORD_SOURCE_KEYFILE:
+                        return enroll_keyfile(c, cd, volume_key);
+
+                default:
+                        assert_not_reached();
+                }
 
         case ENROLL_RECOVERY:
                 return enroll_recovery(c, cd, volume_key, ret_recovery_key);

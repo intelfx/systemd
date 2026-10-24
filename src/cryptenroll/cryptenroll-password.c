@@ -303,3 +303,48 @@ int enroll_password(
         log_info("New password enrolled as key slot %i.", keyslot);
         return keyslot;
 }
+
+int enroll_keyfile(
+                const EnrollContext *c,
+                struct crypt_device *cd,
+                const struct iovec *volume_key) {
+
+        _cleanup_(iovec_done_erase) struct iovec key = {};
+        const char *node;
+        int r, keyslot;
+
+        assert(c);
+        assert(c->keyfile);
+        assert(cd);
+        assert(iovec_is_set(volume_key));
+
+        assert_se(node = sym_crypt_get_device_name(cd));
+
+        r = read_full_file_full(
+                        AT_FDCWD,
+                        c->keyfile,
+                        UINT64_MAX,
+                        4U * U64_MB, /* safety net */
+                        READ_FULL_FILE_SECURE|READ_FULL_FILE_WARN_WORLD_READABLE|READ_FULL_FILE_CONNECT_SOCKET|READ_FULL_FILE_FAIL_WHEN_LARGER,
+                        NULL,
+                        (char**) &key.iov_base,
+                        &key.iov_len);
+        if (r < 0)
+                return log_error_errno(r, "Reading keyfile %s failed: %m", c->keyfile);
+        if (key.iov_len == 0)
+                return log_error_errno(SYNTHETIC_ERRNO(EINVAL),
+                                       "Keyfile %s is empty, refusing. Use --empty to enroll an empty password.", c->keyfile);
+
+        keyslot = sym_crypt_keyslot_add_by_volume_key(
+                        cd,
+                        CRYPT_ANY_SLOT,
+                        volume_key->iov_base,
+                        volume_key->iov_len,
+                        key.iov_base,
+                        key.iov_len);
+        if (keyslot < 0)
+                return log_error_errno(keyslot, "Failed to add keyfile to %s: %m", node);
+
+        log_info("New keyfile enrolled as key slot %i.", keyslot);
+        return keyslot;
+}

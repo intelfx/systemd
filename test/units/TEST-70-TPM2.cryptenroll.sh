@@ -12,7 +12,7 @@ cryptenroll_wipe_and_check() {(
 )}
 
 at_exit() {
-    rm -f "${IMAGE:-}" "${VL_IMAGE:-}" /tmp/cryptenroll.out /tmp/password
+    rm -f "${IMAGE:-}" "${VL_IMAGE:-}" /tmp/cryptenroll.out /tmp/password /tmp/keyfile
 }
 
 trap at_exit EXIT
@@ -37,6 +37,9 @@ cryptsetup luksFormat -q --pbkdf pbkdf2 --pbkdf-force-iterations 1000 --use-uran
 systemd-cryptenroll --unlock-key-file=/tmp/password --tpm2-device=auto --tpm2-public-key= "$IMAGE"
 NEWPASSWORD="" systemd-cryptenroll --unlock-key-file=/tmp/password  --password "$IMAGE"
 NEWPASSWORD=foo systemd-cryptenroll --unlock-key-file=/tmp/password  --password "$IMAGE"
+head -c 64 /dev/urandom >/tmp/keyfile
+chmod 0600 /tmp/keyfile
+systemd-cryptenroll --unlock-key-file=/tmp/password --keyfile=/tmp/keyfile "$IMAGE"
 for _ in {0..9}; do
     systemd-cryptenroll --unlock-key-file=/tmp/password --recovery-key "$IMAGE"
 done

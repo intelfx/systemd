@@ -350,6 +350,17 @@
       </varlistentry>
 
       <varlistentry>
+        <term><option>--keyfile=<replaceable>PATH</replaceable></option></term>
+
+        <listitem><para>Enroll the contents of the specified file as a password/passphrase. The file may
+        contain arbitrary binary data, and is used in full. The resulting key slot is indistinguishable from
+        one enrolled with <option>--password</option>, and may be unlocked with
+        <option>--unlock-key-file=</option>.</para>
+
+        <xi:include href="version-info.xml" xpointer="v263"/></listitem>
+      </varlistentry>
+
+      <varlistentry>
         <term><option>--recovery-key</option></term>
 
         <listitem><para>Enroll a recovery key. Recovery keys are mostly identical to passphrases, but are

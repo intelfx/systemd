@@ -34,6 +34,13 @@ typedef enum WipeScope {
         _WIPE_SCOPE_INVALID = -EINVAL,
 } WipeScope;
 
+typedef enum PasswordSource {
+        PASSWORD_SOURCE_PROMPT,         /* c->passphrase, $NEWPASSWORD, or askpw */
+        PASSWORD_SOURCE_KEYFILE,        /* contents of c->keyfile */
+        _PASSWORD_SOURCE_MAX,
+        _PASSWORD_SOURCE_INVALID = -EINVAL,
+} PasswordSource;
+
 typedef enum Tpm2WithPin {
         TPM2_WITH_PIN_NO,
         TPM2_WITH_PIN_YES,       /* with argon2id */
@@ -65,6 +72,11 @@ typedef struct EnrollContext {
          * $NEWPASSWORD / askpw. */
         char *passphrase;
         size_t passphrase_size;
+
+        /* Where the new password comes from (mechanism == password). The slot is indistinguishable from
+         * a regular password slot in the LUKS2 header in all cases. */
+        PasswordSource password_source;
+        char *keyfile;                  /* PASSWORD_SOURCE_KEYFILE: file to read the key from */
 
         /* FIDO2 */
         char *fido2_device;
