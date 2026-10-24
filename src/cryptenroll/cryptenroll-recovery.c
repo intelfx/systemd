@@ -10,6 +10,7 @@
 #include "log.h"
 #include "qrcode-util.h"
 #include "recovery-key.h"
+#include "string-util.h"
 
 int enroll_recovery(
                 const EnrollContext *c,
@@ -21,13 +22,14 @@ int enroll_recovery(
         _cleanup_(erase_and_freep) char *password = NULL;
         _cleanup_free_ char *keyslot_as_string = NULL;
         int keyslot, r, q;
-        const char *node;
+        const char *node, *uuid;
 
         assert_se(c);
         assert_se(cd);
         assert_se(iovec_is_set(volume_key));
 
         assert_se(node = sym_crypt_get_device_name(cd));
+        uuid = sym_crypt_get_uuid(cd);
 
         r = make_recovery_key(&password);
         if (r < 0)
@@ -50,8 +52,12 @@ int enroll_recovery(
         if (c->interactive) {
                 fflush(stdout);
                 fprintf(stderr,
-                        "A secret recovery key has been generated for this volume:\n\n"
+                        "A secret recovery key has been generated for volume %s%s%s%s:\n\n"
                         "    %s%s%s",
+                        node,
+                        uuid ? " (UUID " : "",
+                        strempty(uuid),
+                        uuid ? ")" : "",
                         emoji_enabled() ? glyph(GLYPH_LOCK_AND_KEY) : "",
                         emoji_enabled() ? " " : "",
                         ansi_highlight());

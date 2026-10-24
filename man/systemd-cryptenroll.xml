@@ -355,7 +355,7 @@
         <listitem><para>Enroll a recovery key. Recovery keys are mostly identical to passphrases, but are
         computer-generated instead of being chosen by a human, and thus have a guaranteed high entropy. The
         key uses a character set that is easy to type in, and may be scanned off screen via a QR code.
-        </para>
+        The volume's device node and UUID are shown along with the key.</para>
 
         <xi:include href="version-info.xml" xpointer="v248"/></listitem>
       </varlistentry>
