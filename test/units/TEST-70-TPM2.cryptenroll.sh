@@ -12,8 +12,9 @@ cryptenroll_wipe_and_check() {(
 )}
 
 at_exit() {
-    rm -f "${IMAGE:-}" "${VL_IMAGE:-}" /tmp/cryptenroll.out /tmp/password /tmp/keyfile
+    rm -f "${IMAGE:-}" "${VL_IMAGE:-}" /tmp/cryptenroll.out /tmp/password /tmp/keyfile /tmp/recovery-key
     rm -f /etc/cryptsetup-keys.d/cryptenroll-test.key
+    rm -rf /run/cryptenroll
 }
 
 trap at_exit EXIT
@@ -46,6 +47,11 @@ systemd-cryptenroll --unlock-empty --auto-keyfile=cryptenroll-test "$IMAGE"
 (! systemd-cryptenroll --unlock-empty --auto-keyfile=cryptenroll-test "$IMAGE")
 test "$(stat -c %a /etc/cryptsetup-keys.d/cryptenroll-test.key)" = 400
 systemd-cryptenroll --unlock-key-file=/etc/cryptsetup-keys.d/cryptenroll-test.key "$IMAGE"
+systemd-cryptenroll --unlock-empty --recovery-keyfile=/tmp/recovery-key "$IMAGE"
+(! systemd-cryptenroll --unlock-empty --recovery-keyfile=/tmp/recovery-key "$IMAGE")
+systemd-cryptenroll --unlock-key-file=/tmp/recovery-key "$IMAGE"
+systemd-cryptenroll --unlock-empty --recovery-keyfile "$IMAGE"
+systemd-cryptenroll --unlock-key-file="/run/cryptenroll/$(cryptsetup luksUUID "$IMAGE").recovery-key" "$IMAGE"
 for _ in {0..9}; do
     systemd-cryptenroll --unlock-key-file=/tmp/password --recovery-key "$IMAGE"
 done

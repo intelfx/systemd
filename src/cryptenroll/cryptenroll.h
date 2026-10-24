@@ -81,6 +81,11 @@ typedef struct EnrollContext {
         char *keyfile;                  /* PASSWORD_SOURCE_KEYFILE: file to read the key from */
         char *auto_keyfile_volume;      /* PASSWORD_SOURCE_AUTO_KEYFILE: volume name, NULL to autodetect */
 
+        /* Recovery key: if set, additionally write the generated key to recovery_keyfile (or a default
+         * location below /run/ if NULL) */
+        bool write_recovery_keyfile;
+        char *recovery_keyfile;
+
         /* FIDO2 */
         char *fido2_device;
         char *fido2_salt_file;

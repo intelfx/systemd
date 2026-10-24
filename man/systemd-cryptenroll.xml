@@ -408,6 +408,23 @@
 
         <xi:include href="version-info.xml" xpointer="v248"/></listitem>
       </varlistentry>
+
+      <varlistentry>
+        <term><option>--recovery-keyfile</option></term>
+        <term><option>--recovery-keyfile=<replaceable>PATH</replaceable></option></term>
+
+        <listitem><para>Like <option>--recovery-key</option>, but additionally write the generated recovery
+        key to the specified file, which is created with access mode 0400 (missing parent directories are
+        created with access mode 0700). If no path is specified,
+        <filename>/run/cryptenroll/<replaceable>UUID</replaceable>.recovery-key</filename> is used, where
+        <replaceable>UUID</replaceable> is the UUID of the LUKS2 volume. An existing file is never
+        overwritten. The file contains the key without a trailing newline, and hence may be used with
+        <option>--unlock-key-file=</option> directly. This is useful for enrolling recovery keys on multiple
+        volumes in batch, so that the keys can be collected afterwards. A warning is shown if the file is
+        not located on a temporary file system.</para>
+
+        <xi:include href="version-info.xml" xpointer="v263"/></listitem>
+      </varlistentry>
     </variablelist>
   </refsect1>
 

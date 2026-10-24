@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: LGPL-2.1-or-later */
 
+#include <unistd.h>
+
 #include "alloc-util.h"
 #include "ansi-color.h"
 #include "cryptenroll-recovery.h"
@@ -8,8 +10,10 @@
 #include "iovec-util.h"
 #include "json-util.h"
 #include "log.h"
+#include "path-util.h"
 #include "qrcode-util.h"
 #include "recovery-key.h"
+#include "stat-util.h"
 #include "string-util.h"
 
 int enroll_recovery(
@@ -20,7 +24,8 @@ int enroll_recovery(
 
         _cleanup_(sd_json_variant_unrefp) sd_json_variant *v = NULL;
         _cleanup_(erase_and_freep) char *password = NULL;
-        _cleanup_free_ char *keyslot_as_string = NULL;
+        _cleanup_free_ char *keyslot_as_string = NULL, *keyfile = NULL;
+        bool keyfile_written = false;
         int keyslot, r, q;
         const char *node, *uuid;
 
@@ -30,6 +35,23 @@ int enroll_recovery(
 
         assert_se(node = sym_crypt_get_device_name(cd));
         uuid = sym_crypt_get_uuid(cd);
+
+        if (c->write_recovery_keyfile) {
+                if (c->recovery_keyfile)
+                        keyfile = strdup(c->recovery_keyfile);
+                else if (uuid)
+                        keyfile = strjoin("/run/cryptenroll/", uuid, ".recovery-key");
+                else
+                        return log_error_errno(SYNTHETIC_ERRNO(ENODATA),
+                                               "LUKS2 volume has no UUID, please specify recovery key file path explicitly.");
+                if (!keyfile)
+                        return log_oom();
+
+                if (access(keyfile, F_OK) >= 0)
+                        return log_error_errno(SYNTHETIC_ERRNO(EEXIST), "File %s already exists, refusing.", keyfile);
+                if (errno != ENOENT)
+                        return log_error_errno(errno, "Failed to check if %s exists: %m", keyfile);
+        }
 
         r = make_recovery_key(&password);
         if (r < 0)
@@ -81,6 +103,29 @@ int enroll_recovery(
                 (void) print_qrcode(stderr, "Optionally scan the recovery key for safekeeping", password);
         }
 
+        if (keyfile) {
+                _cleanup_free_ char *dir = NULL;
+
+                r = write_key_file(keyfile, &IOVEC_MAKE_STRING(password));
+                if (r < 0)
+                        goto rollback;
+
+                keyfile_written = true;
+
+                r = path_extract_directory(keyfile, &dir);
+                if (r < 0)
+                        log_debug_errno(r, "Failed to extract directory of %s, ignoring: %m", keyfile);
+                else {
+                        r = path_is_temporary_fs(dir);
+                        if (r < 0)
+                                log_debug_errno(r, "Failed to determine file system type of %s, ignoring: %m", dir);
+                        else if (r == 0)
+                                log_warning("Recovery key file %s is not located on a temporary file system, make sure to remove it once it has been saved elsewhere.", keyfile);
+                }
+
+                log_info("Recovery key for volume %s written to %s.", node, keyfile);
+        }
+
         if (asprintf(&keyslot_as_string, "%i", keyslot) < 0) {
                 r = log_oom();
                 goto rollback;
@@ -109,6 +154,9 @@ int enroll_recovery(
         return keyslot;
 
 rollback:
+        if (keyfile_written && unlink(keyfile) < 0)
+                log_debug_errno(errno, "Failed to remove %s again, ignoring: %m", keyfile);
+
         q = sym_crypt_keyslot_destroy(cd, keyslot);
         if (q < 0)
                 log_debug_errno(q, "Unable to remove key slot we just added again, can't rollback, sorry: %m");
